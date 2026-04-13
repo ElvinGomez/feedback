@@ -64,12 +64,12 @@ app.use('/feedback/survey', publicSurveyStack);
 const internalReportStack = express.Router();
 internalReportStack.use(requireInternalApiKey);
 internalReportStack.use('/', internalReportRoutes);
-app.use('/internal/feedback/reports', internalReportStack);
+app.use('/feedback/internal/reports', internalReportStack);
 
 const internalSurveyStack = express.Router();
 internalSurveyStack.use(requireInternalApiKey);
 internalSurveyStack.use('/', internalSurveyRoutes);
-app.use('/internal/feedback/survey', internalSurveyStack);
+app.use('/feedback/internal/survey', internalSurveyStack);
 
 app.use(errorMiddleware);
 
