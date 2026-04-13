@@ -1,0 +1,44 @@
+import mongoose from 'mongoose';
+
+export type SurveyQuestionType =
+  | 'nps'
+  | 'rating'
+  | 'single_choice'
+  | 'open_text';
+
+export type SurveyQuestion = {
+  id: string;
+  type: SurveyQuestionType;
+  label: string;
+  options?: { id: string; label: string }[];
+  min?: number;
+  max?: number;
+};
+
+const surveySchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true },
+    questions: { type: [mongoose.Schema.Types.Mixed], required: true },
+    placements: { type: [String], required: true, default: [] },
+    priority: { type: Number, default: 0 },
+    status: {
+      type: String,
+      enum: ['draft', 'published', 'archived'],
+      default: 'draft',
+    },
+    schedule: {
+      startAt: { type: Date },
+      endAt: { type: Date },
+    },
+  },
+  { timestamps: true },
+);
+
+surveySchema.index({ status: 1, priority: -1, updatedAt: -1 });
+
+export type SurveyDoc = mongoose.InferSchemaType<typeof surveySchema> & {
+  _id: mongoose.Types.ObjectId;
+};
+
+export const Survey =
+  mongoose.models.Survey || mongoose.model('Survey', surveySchema);
