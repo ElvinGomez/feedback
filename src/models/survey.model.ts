@@ -17,6 +17,10 @@ export type SurveyQuestion = {
 
 const surveySchema = new mongoose.Schema(
   {
+    /** Language of `title` / `questions` (e.g. `en`, `es_PA`). */
+    defaultLocale: { type: String, required: true, default: 'en' },
+    /** Other locales: same question ids/types as `questions`; labels differ. */
+    translations: { type: mongoose.Schema.Types.Mixed, default: undefined },
     title: { type: String, required: true },
     questions: { type: [mongoose.Schema.Types.Mixed], required: true },
     placements: { type: [String], required: true, default: [] },

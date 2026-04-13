@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { Survey } from '../models/survey.model';
 import type { SurveyQuestion } from '../models/survey.model';
 import { SurveyResponse } from '../models/survey-response.model';
+import { translationQuestionsMismatchMessage } from '../validation/survey.validation';
 import { logger } from '../utils/logger';
 
 function isDuplicateKeyError(err: unknown): boolean {
@@ -14,8 +15,15 @@ function isDuplicateKeyError(err: unknown): boolean {
   );
 }
 
+type SurveyTranslations = Record<
+  string,
+  { title: string; questions: SurveyQuestion[] }
+>;
+
 function serializeSurvey(s: {
   _id: mongoose.Types.ObjectId;
+  defaultLocale?: string;
+  translations?: SurveyTranslations;
   title: string;
   questions: unknown[];
   placements: string[];
@@ -27,6 +35,8 @@ function serializeSurvey(s: {
 }) {
   return {
     id: s._id.toString(),
+    defaultLocale: s.defaultLocale ?? 'en',
+    translations: s.translations ?? {},
     title: s.title,
     questions: s.questions,
     placements: s.placements,
@@ -41,6 +51,99 @@ function serializeSurvey(s: {
     createdAt: s.createdAt.toISOString(),
     updatedAt: s.updatedAt.toISOString(),
   };
+}
+
+function pickTranslationBundle(
+  translations: SurveyTranslations | undefined,
+  locale: string,
+): { title: string; questions: SurveyQuestion[] } | null {
+  if (!translations || typeof translations !== 'object') {
+    return null;
+  }
+  const exact = translations[locale];
+  if (exact) {
+    return exact;
+  }
+  const short = locale.split(/[-_]/)[0];
+  if (short && translations[short]) {
+    return translations[short];
+  }
+  return null;
+}
+
+function mergeQuestionDisplayLabels(
+  base: SurveyQuestion[],
+  tr: SurveyQuestion[],
+): SurveyQuestion[] {
+  const trById = new Map(tr.map((q) => [q.id, q]));
+  return base.map((bq) => {
+    const t = trById.get(bq.id);
+    if (!t) {
+      return bq;
+    }
+    const next: SurveyQuestion = {
+      ...bq,
+      label: (t.label ?? '').trim() || bq.label,
+    };
+    if (bq.type === 'single_choice' && bq.options && t.options) {
+      const tm = new Map(t.options.map((o) => [o.id, o]));
+      next.options = bq.options.map((o) => ({
+        ...o,
+        label: (tm.get(o.id)?.label ?? '').trim() || o.label,
+      }));
+    }
+    return next;
+  });
+}
+
+function displaySurveyForLocale(
+  survey: {
+    title: string;
+    questions: unknown;
+    defaultLocale?: string;
+    translations?: SurveyTranslations;
+  },
+  locale: string | undefined,
+): { title: string; questions: SurveyQuestion[] } {
+  const primary = {
+    title: survey.title,
+    questions: survey.questions as SurveyQuestion[],
+  };
+  const def = survey.defaultLocale ?? 'en';
+  if (!locale || locale === def) {
+    return primary;
+  }
+  const bundle = pickTranslationBundle(survey.translations, locale);
+  if (!bundle) {
+    return primary;
+  }
+  return {
+    title: bundle.title || primary.title,
+    questions: mergeQuestionDisplayLabels(primary.questions, bundle.questions),
+  };
+}
+
+function validateTranslationsPayload(
+  defaultLocale: string,
+  baseQuestions: SurveyQuestion[],
+  translations: SurveyTranslations | undefined,
+): string | null {
+  if (!translations) {
+    return null;
+  }
+  for (const loc of Object.keys(translations)) {
+    if (loc === defaultLocale) {
+      return `Translation locale "${loc}" cannot duplicate defaultLocale.`;
+    }
+    const msg = translationQuestionsMismatchMessage(
+      baseQuestions,
+      translations[loc].questions,
+    );
+    if (msg) {
+      return `${loc}: ${msg}`;
+    }
+  }
+  return null;
 }
 
 function validateAnswersForQuestions(
@@ -102,7 +205,7 @@ export async function getActiveSurvey(
     return;
   }
 
-  const { placement } = req.query as { placement: string };
+  const { placement, locale } = req.query as { placement: string; locale?: string };
   const now = new Date();
 
   const filter: Record<string, unknown> = {
@@ -142,11 +245,20 @@ export async function getActiveSurvey(
         .lean()
         .exec();
       if (!existing) {
+        const shown = displaySurveyForLocale(
+          {
+            title: s.title,
+            questions: s.questions,
+            defaultLocale: (s as { defaultLocale?: string }).defaultLocale,
+            translations: (s as { translations?: SurveyTranslations }).translations,
+          },
+          locale,
+        );
         res.status(200).json({
           survey: {
             id: sid.toString(),
-            title: s.title,
-            questions: s.questions as SurveyQuestion[],
+            title: shown.title,
+            questions: shown.questions,
           },
         });
         return;
@@ -266,6 +378,8 @@ export async function internalCreateSurvey(
   res: Response,
 ): Promise<void> {
   const body = req.body as {
+    defaultLocale: string;
+    translations?: SurveyTranslations;
     title: string;
     questions: SurveyQuestion[];
     placements: string[];
@@ -274,7 +388,19 @@ export async function internalCreateSurvey(
     schedule?: { startAt?: Date; endAt?: Date };
   };
 
+  const trErr = validateTranslationsPayload(
+    body.defaultLocale,
+    body.questions,
+    body.translations,
+  );
+  if (trErr) {
+    res.status(400).json({ message: trErr, code: 'INVALID_TRANSLATIONS' });
+    return;
+  }
+
   const doc = await Survey.create({
+    defaultLocale: body.defaultLocale,
+    translations: body.translations,
     title: body.title,
     questions: body.questions,
     placements: body.placements,
@@ -298,6 +424,8 @@ export async function internalPatchSurvey(
   }
 
   const body = req.body as {
+    defaultLocale?: string;
+    translations?: SurveyTranslations;
     title?: string;
     questions?: SurveyQuestion[];
     placements?: string[];
@@ -306,7 +434,38 @@ export async function internalPatchSurvey(
     schedule?: { startAt?: Date | null; endAt?: Date | null };
   };
 
+  const existing = await Survey.findById(id).lean().exec();
+  if (!existing) {
+    res.status(404).json({ message: 'Survey not found', code: 'NOT_FOUND' });
+    return;
+  }
+
+  const existingSurvey = existing as unknown as {
+    questions: SurveyQuestion[];
+    defaultLocale?: string;
+    translations?: SurveyTranslations;
+  };
+
+  const nextDefault = body.defaultLocale ?? existingSurvey.defaultLocale ?? 'en';
+  const nextQuestions = (body.questions ?? existingSurvey.questions) as SurveyQuestion[];
+  const nextTranslations =
+    body.translations !== undefined
+      ? body.translations
+      : (existingSurvey.translations ?? undefined);
+
+  const trErr = validateTranslationsPayload(nextDefault, nextQuestions, nextTranslations);
+  if (trErr) {
+    res.status(400).json({ message: trErr, code: 'INVALID_TRANSLATIONS' });
+    return;
+  }
+
   const update: Record<string, unknown> = {};
+  if (body.defaultLocale !== undefined) {
+    update.defaultLocale = body.defaultLocale;
+  }
+  if (body.translations !== undefined) {
+    update.translations = body.translations;
+  }
   if (body.title !== undefined) {
     update.title = body.title;
   }
