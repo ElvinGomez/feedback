@@ -32,7 +32,7 @@ const contentReportSchema = new Schema<IContentReport>(
     targetId: { type: String, required: true, index: true },
     reporterUserId: { type: String, required: true, index: true },
     reason: { type: String, required: true, index: true, maxlength: 64 },
-    comment: { type: String, required: true, maxlength: 2000, default: '' },
+    comment: { type: String, maxlength: 2000, default: '' },
     status: {
       type: String,
       required: true,
