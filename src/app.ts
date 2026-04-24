@@ -9,6 +9,7 @@ import reportRoutes from './routes/report.routes';
 import surveyRoutes from './routes/survey.routes';
 import internalReportRoutes from './routes/internal-report.routes';
 import internalSurveyRoutes from './routes/internal-survey.routes';
+import healthRoutes from './routes/health.routes';
 import errorMiddleware from './middleware/error.middleware';
 import { reportsFeatureFlagsMiddleware } from './middleware/reports-feature-flags.middleware';
 import {
@@ -25,9 +26,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.get('/health', (_req, res) => {
-  res.status(200).json({ status: 'ok' });
-});
+app.use('/feedback/health', healthRoutes);
 
 const requireDependencies = async (
   _req: express.Request,
