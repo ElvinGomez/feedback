@@ -7,6 +7,9 @@ import { SurveyResponse } from '../models/survey-response.model';
 import { translationQuestionsMismatchMessage } from '../validation/survey.validation';
 import { logger } from '../utils/logger';
 
+/** Max length for `open_text` survey answers (must match mobile client). */
+const OPEN_TEXT_MAX_LENGTH = 200;
+
 function isDuplicateKeyError(err: unknown): boolean {
   return (
     typeof err === 'object' &&
@@ -185,6 +188,9 @@ function validateAnswersForQuestions(
       case 'open_text': {
         if (typeof v !== 'string') {
           return `Invalid text for ${q.id}`;
+        }
+        if (v.length > OPEN_TEXT_MAX_LENGTH) {
+          return `Text too long for ${q.id} (max ${OPEN_TEXT_MAX_LENGTH})`;
         }
         break;
       }

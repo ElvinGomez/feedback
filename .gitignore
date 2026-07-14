@@ -31,3 +31,6 @@ coverage/
 
 # Misc
 *.tsbuildinfo
+
+# graphify knowledge-graph outputs
+graphify-out/
