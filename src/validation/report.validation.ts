@@ -16,7 +16,7 @@ export const createReportBodySchema = z
     targetType: reportTargetTypeSchema,
     targetId: z.string().min(1).max(128),
     reason: z.string().min(1).max(64),
-    comment: z.string().max(2000).optional().default(''),
+    comment: z.string().max(200).optional().default(''),
   })
   .superRefine((data, ctx) => {
     const tt = data.targetType as ReportTargetType;
