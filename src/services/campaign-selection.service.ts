@@ -14,6 +14,7 @@ import { PromotionUserState } from '../models/promotion-user-state.model';
 import { Survey } from '../models/survey.model';
 import type { SurveyQuestion } from '../models/survey.model';
 import { SurveyResponse } from '../models/survey-response.model';
+import { logger } from '../utils/logger';
 
 export type WeightedItem = { id: string; weight: number };
 
@@ -131,6 +132,7 @@ type SurveyCandidate = {
 
 type PromotionCandidate = {
   _id: mongoose.Types.ObjectId;
+  internalName?: string;
   title: string;
   message?: string;
   mediaType?: string;
@@ -328,9 +330,21 @@ export async function selectCampaignContent(opts: {
 
   const eligiblePromotions: WeightedItem[] = [];
   const promoById = new Map<string, PromotionCandidate>();
+  const promoRejections: Array<{ id: string; name?: string; reason: string }> = [];
   const promotionsAllowedForPlacement =
     (PROMOTION_PLACEMENTS_V1 as readonly string[]).includes(opts.placement) &&
     placementConfig.promotionsEnabled !== false;
+
+  const promoGateReason =
+    !opts.promotionsFeatureEnabled
+      ? 'promotions_feature_disabled'
+      : !enabledTypes.has('promotion')
+        ? 'placement_config_promotion_type_disabled'
+        : !(PROMOTION_PLACEMENTS_V1 as readonly string[]).includes(opts.placement)
+          ? 'placement_not_in_promotion_placements_v1'
+          : placementConfig.promotionsEnabled === false
+            ? 'placement_config_promotionsEnabled_false'
+            : null;
 
   if (
     opts.promotionsFeatureEnabled &&
@@ -345,19 +359,24 @@ export async function selectCampaignContent(opts: {
       .exec()) as PromotionCandidate[];
 
     for (const p of promoCandidates) {
+      const pid = p._id.toString();
       if (!isWithinSchedule(p.schedule, now)) {
+        promoRejections.push({ id: pid, name: p.internalName, reason: 'outside_schedule' });
         continue;
       }
       if (p.platforms?.length && opts.platform && !p.platforms.includes(opts.platform)) {
+        promoRejections.push({ id: pid, name: p.internalName, reason: `platform_mismatch(need=${p.platforms.join('|')},got=${opts.platform})` });
         continue;
       }
       if (p.minAppVersion && opts.appVersion) {
         if (compareSemver(opts.appVersion, p.minAppVersion) < 0) {
+          promoRejections.push({ id: pid, name: p.internalName, reason: `below_min_app_version(min=${p.minAppVersion},got=${opts.appVersion})` });
           continue;
         }
       }
       if (p.maxAppVersion && opts.appVersion) {
         if (compareSemver(opts.appVersion, p.maxAppVersion) > 0) {
+          promoRejections.push({ id: pid, name: p.internalName, reason: `above_max_app_version(max=${p.maxAppVersion},got=${opts.appVersion})` });
           continue;
         }
       }
@@ -365,12 +384,14 @@ export async function selectCampaignContent(opts: {
         typeof p.maxTotalImpressions === 'number' &&
         (p.stats?.impressions ?? 0) >= p.maxTotalImpressions
       ) {
+        promoRejections.push({ id: pid, name: p.internalName, reason: 'max_total_impressions_reached' });
         continue;
       }
       if (
         typeof p.maxInteractions === 'number' &&
         (p.stats?.primaryCta ?? 0) + (p.stats?.secondaryCta ?? 0) >= p.maxInteractions
       ) {
+        promoRejections.push({ id: pid, name: p.internalName, reason: 'max_interactions_reached' });
         continue;
       }
 
@@ -393,6 +414,7 @@ export async function selectCampaignContent(opts: {
           now,
         })
       ) {
+        promoRejections.push({ id: pid, name: p.internalName, reason: `frequency_cap(rule=${p.frequencyRule ?? 'none'})` });
         continue;
       }
 
@@ -401,19 +423,20 @@ export async function selectCampaignContent(opts: {
         state &&
         state.impressionCount >= p.maxImpressionsPerUser
       ) {
+        promoRejections.push({ id: pid, name: p.internalName, reason: 'max_impressions_per_user_reached' });
         continue;
       }
 
-      const id = p._id.toString();
+      const id = pid;
       const weight = p.selectionWeight ?? 0;
       if (weight <= 0) {
+        promoRejections.push({ id: pid, name: p.internalName, reason: `weight_zero(selectionWeight=${p.selectionWeight ?? 'undefined'})` });
         continue;
       }
       eligiblePromotions.push({ id, weight });
       promoById.set(id, p);
     }
   }
-
   const typePool: Array<{ id: CampaignContentType; weight: number }> = [];
   if (eligibleSurveys.length > 0 && (placementConfig.surveyContentTypeWeight ?? 0) > 0) {
     typePool.push({
@@ -446,6 +469,11 @@ export async function selectCampaignContent(opts: {
     surveyWeights: Object.fromEntries(eligibleSurveys.map((s) => [s.id, s.weight])),
     selectedContentTypeWeight: pickedType.weight,
     selectionSource: 'server_weighted_random' as const,
+    promotionsFeatureEnabled: opts.promotionsFeatureEnabled,
+    surveysFeatureEnabled: opts.surveysFeatureEnabled,
+    promotionsEnabled: placementConfig.promotionsEnabled !== false,
+    promoGateReason,
+    promoRejections: promoRejections.slice(0, 20),
   };
 
   let contentId: string;
