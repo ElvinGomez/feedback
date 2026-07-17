@@ -61,6 +61,7 @@ export const internalCreateSurveyBodySchema = z.object({
   questions: z.array(questionSchema).min(1),
   placements: z.array(z.string().min(1)).default([]),
   priority: z.number().int().default(0),
+  selectionWeight: z.number().int().optional(),
   status: z.enum(['draft', 'published', 'archived']).default('draft'),
   schedule: z
     .object({
@@ -77,6 +78,7 @@ export const internalPatchSurveyBodySchema = z.object({
   questions: z.array(questionSchema).min(1).optional(),
   placements: z.array(z.string().min(1)).optional(),
   priority: z.number().int().optional(),
+  selectionWeight: z.number().int().optional(),
   status: z.enum(['draft', 'published', 'archived']).optional(),
   schedule: z
     .object({

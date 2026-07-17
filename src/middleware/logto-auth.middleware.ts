@@ -59,10 +59,16 @@ export function reportRouteToFeaturePath(req: Request): string | null {
   if (key === null) {
     return null;
   }
-  const perm =
-    key === 'surveys'
-      ? permissionPathForResourceKey('feedback', 'surveys')
-      : permissionPathForResourceKey('feedback', `reports.${key}`);
+  let perm: string;
+  if (key === 'surveys') {
+    perm = permissionPathForResourceKey('feedback', 'surveys');
+  } else if (key === 'campaignDelivery') {
+    perm = 'feedback:campaign_delivery';
+  } else if (key === 'promotions') {
+    perm = permissionPathForResourceKey('feedback', 'promotions');
+  } else {
+    perm = permissionPathForResourceKey('feedback', `reports.${key}`);
+  }
   return getAuth().isFeatureFlagPath(perm) ? perm : null;
 }
 

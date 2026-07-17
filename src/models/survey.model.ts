@@ -25,6 +25,8 @@ const surveySchema = new mongoose.Schema(
     questions: { type: [mongoose.Schema.Types.Mixed], required: true },
     placements: { type: [String], required: true, default: [] },
     priority: { type: Number, default: 0 },
+    /** Used by campaign-delivery weighted rotation; falls back to priority when unset. */
+    selectionWeight: { type: Number, default: undefined },
     status: {
       type: String,
       enum: ['draft', 'published', 'archived'],

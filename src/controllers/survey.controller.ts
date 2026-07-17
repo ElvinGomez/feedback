@@ -31,6 +31,7 @@ function serializeSurvey(s: {
   questions: unknown[];
   placements: string[];
   priority: number;
+  selectionWeight?: number;
   status: string;
   schedule?: { startAt?: Date; endAt?: Date };
   createdAt: Date;
@@ -44,6 +45,8 @@ function serializeSurvey(s: {
     questions: s.questions,
     placements: s.placements,
     priority: s.priority,
+    selectionWeight:
+      typeof s.selectionWeight === 'number' ? s.selectionWeight : s.priority,
     status: s.status,
     schedule: s.schedule
       ? {
@@ -390,6 +393,7 @@ export async function internalCreateSurvey(
     questions: SurveyQuestion[];
     placements: string[];
     priority: number;
+    selectionWeight?: number;
     status: string;
     schedule?: { startAt?: Date; endAt?: Date };
   };
@@ -411,6 +415,7 @@ export async function internalCreateSurvey(
     questions: body.questions,
     placements: body.placements,
     priority: body.priority,
+    selectionWeight: body.selectionWeight ?? body.priority,
     status: body.status,
     schedule: body.schedule,
   });
@@ -436,6 +441,7 @@ export async function internalPatchSurvey(
     questions?: SurveyQuestion[];
     placements?: string[];
     priority?: number;
+    selectionWeight?: number;
     status?: string;
     schedule?: { startAt?: Date | null; endAt?: Date | null };
   };
@@ -483,6 +489,9 @@ export async function internalPatchSurvey(
   }
   if (body.priority !== undefined) {
     update.priority = body.priority;
+  }
+  if (body.selectionWeight !== undefined) {
+    update.selectionWeight = body.selectionWeight;
   }
   if (body.status !== undefined) {
     update.status = body.status;

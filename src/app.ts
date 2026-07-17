@@ -5,10 +5,17 @@ import { initDependencies } from './bootstrap';
 import './models/content-report.model';
 import './models/survey.model';
 import './models/survey-response.model';
+import './models/promotion.model';
+import './models/campaign-selection.model';
+import './models/campaign-event.model';
+import './models/campaign-placement-config.model';
+import './models/promotion-user-state.model';
 import reportRoutes from './routes/report.routes';
 import surveyRoutes from './routes/survey.routes';
+import campaignDeliveryRoutes from './routes/campaign-delivery.routes';
 import internalReportRoutes from './routes/internal-report.routes';
 import internalSurveyRoutes from './routes/internal-survey.routes';
+import internalCampaignDeliveryRoutes from './routes/internal-campaign-delivery.routes';
 import healthRoutes from './routes/health.routes';
 import errorMiddleware from './middleware/error.middleware';
 import { reportsFeatureFlagsMiddleware } from './middleware/reports-feature-flags.middleware';
@@ -60,6 +67,10 @@ const publicSurveyStack = buildPublicFeedbackStack();
 publicSurveyStack.use('/', surveyRoutes);
 app.use('/feedback/survey', publicSurveyStack);
 
+const publicCampaignDeliveryStack = buildPublicFeedbackStack();
+publicCampaignDeliveryStack.use('/', campaignDeliveryRoutes);
+app.use('/feedback/campaign-delivery', publicCampaignDeliveryStack);
+
 const internalReportStack = express.Router();
 internalReportStack.use(requireInternalApiKey);
 internalReportStack.use('/', internalReportRoutes);
@@ -69,6 +80,11 @@ const internalSurveyStack = express.Router();
 internalSurveyStack.use(requireInternalApiKey);
 internalSurveyStack.use('/', internalSurveyRoutes);
 app.use('/feedback/internal/survey', internalSurveyStack);
+
+const internalCampaignDeliveryStack = express.Router();
+internalCampaignDeliveryStack.use(requireInternalApiKey);
+internalCampaignDeliveryStack.use('/', internalCampaignDeliveryRoutes);
+app.use('/feedback/internal/campaign-delivery', internalCampaignDeliveryStack);
 
 app.use(errorMiddleware);
 

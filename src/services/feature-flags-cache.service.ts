@@ -11,6 +11,8 @@ export type ReportsFeatureFlags = {
   delete: boolean;
   stats: boolean;
   surveys: boolean;
+  campaignDelivery: boolean;
+  promotions: boolean;
 };
 
 let cache: { flags: ReportsFeatureFlags; at: number } | null = null;
@@ -43,6 +45,12 @@ function parseReportsPayload(data: unknown): ReportsFeatureFlags | null {
         ? legacyTopReports.surveys
         : false),
   );
+  const campaignDelivery = Boolean(
+    typeof fb?.campaignDelivery === 'boolean' ? fb.campaignDelivery : false,
+  );
+  const promotions = Boolean(
+    typeof fb?.promotions === 'boolean' ? fb.promotions : false,
+  );
   return {
     create: Boolean(p.create),
     read: Boolean(p.read),
@@ -52,6 +60,8 @@ function parseReportsPayload(data: unknown): ReportsFeatureFlags | null {
     delete: Boolean(p.delete),
     stats: Boolean(p.stats),
     surveys,
+    campaignDelivery,
+    promotions,
   };
 }
 
