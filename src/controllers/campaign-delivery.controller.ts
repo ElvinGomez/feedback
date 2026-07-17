@@ -396,13 +396,38 @@ export async function internalCreatePromotion(
   res.status(201).json(serializePromotion(s as Parameters<typeof serializePromotion>[0]));
 }
 
+export async function internalGetPromotion(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res.status(400).json({ message: 'Invalid id', code: 'INVALID_ID' });
+    return;
+  }
+  const doc = await Promotion.findById(id).lean().exec();
+  if (!doc) {
+    res.status(404).json({ message: 'Promotion not found', code: 'NOT_FOUND' });
+    return;
+  }
+  res.status(200).json(
+    serializePromotion(doc as Parameters<typeof serializePromotion>[0]),
+  );
+}
+
 export async function internalPatchPromotion(
   req: AuthenticatedRequest,
   res: Response,
 ): Promise<void> {
   const { id } = req.params;
   const body = req.body as Record<string, unknown>;
-  const doc = await Promotion.findByIdAndUpdate(id, { $set: body }, { new: true }).exec();
+  const update: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (value !== undefined) {
+      update[key] = value;
+    }
+  }
+  const doc = await Promotion.findByIdAndUpdate(id, { $set: update }, { new: true }).exec();
   if (!doc) {
     res.status(404).json({ message: 'Promotion not found', code: 'NOT_FOUND' });
     return;

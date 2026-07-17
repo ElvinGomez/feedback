@@ -2,6 +2,7 @@ import express from 'express';
 import {
   internalCreatePromotion,
   internalGetPlacementConfig,
+  internalGetPromotion,
   internalGetPromotionReport,
   internalListPromotions,
   internalPatchPlacementConfig,
@@ -29,6 +30,12 @@ router.post(
   '/promotions',
   validate(internalCreatePromotionBodySchema),
   internalCreatePromotion,
+);
+
+router.get(
+  '/promotions/:id',
+  validate(objectIdParamSchema, 'params'),
+  internalGetPromotion,
 );
 
 router.patch(

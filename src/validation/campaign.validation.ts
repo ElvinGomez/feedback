@@ -148,8 +148,8 @@ const promotionFieldsSchema = z.object({
   modalSize: z.enum(MODAL_SIZES),
   schedule: z
     .object({
-      startAt: z.coerce.date().optional(),
-      endAt: z.coerce.date().optional(),
+      startAt: z.coerce.date().optional().nullable(),
+      endAt: z.coerce.date().optional().nullable(),
       timezone: z.string().max(64).optional(),
     })
     .optional(),
