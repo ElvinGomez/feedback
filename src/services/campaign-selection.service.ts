@@ -137,6 +137,9 @@ type PromotionCandidate = {
   message?: string;
   mediaType?: string;
   mediaUrl?: string;
+  mediaLayout?: string;
+  textAlignment?: string;
+  background?: string;
   dismissible?: boolean;
   modalSize?: string;
   primaryAction: { label: string; type: string; value?: string };
@@ -224,6 +227,9 @@ function displayPromotion(promo: PromotionCandidate, locale: string | undefined)
     message: bundle?.message ?? promo.message ?? '',
     mediaType: promo.mediaType ?? 'none',
     mediaUrl: promo.mediaUrl ?? '',
+    mediaLayout: promo.mediaLayout ?? 'top',
+    textAlignment: promo.textAlignment ?? 'center',
+    background: promo.background ?? '',
     dismissible: promo.dismissible !== false,
     primaryAction: {
       label: bundle?.primaryAction?.label || promo.primaryAction.label,
