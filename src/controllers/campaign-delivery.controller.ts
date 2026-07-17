@@ -12,6 +12,7 @@ import { Promotion } from '../models/promotion.model';
 import { PromotionUserState } from '../models/promotion-user-state.model';
 import { selectCampaignContent } from '../services/campaign-selection.service';
 import { getReportsFeatureFlags } from '../services/feature-flags-cache.service';
+import { getPromotionStyleIssues } from '../validation/campaign.validation';
 import { logger } from '../utils/logger';
 
 function isDuplicateKeyError(err: unknown): boolean {
@@ -43,6 +44,7 @@ function serializePromotion(p: {
   message?: string;
   mediaType?: string;
   mediaUrl?: string;
+  htmlContent?: string;
   mediaLayout?: string;
   textAlignment?: string;
   background?: string;
@@ -77,6 +79,7 @@ function serializePromotion(p: {
     message: p.message ?? '',
     mediaType: p.mediaType ?? 'none',
     mediaUrl: p.mediaUrl ?? '',
+    htmlContent: p.htmlContent ?? '',
     mediaLayout: p.mediaLayout,
     textAlignment: p.textAlignment,
     background: p.background,
@@ -99,7 +102,7 @@ function serializePromotion(p: {
     platforms: p.platforms,
     minAppVersion: p.minAppVersion ?? '',
     maxAppVersion: p.maxAppVersion ?? '',
-    targetAudience: p.targetAudience,
+    targetAudience: p.targetAudience ?? { allowAll: true },
     stats: p.stats,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -116,10 +119,12 @@ export async function getCampaignContent(
     return;
   }
 
-  const q = req.query as {
+  const q = req.query as unknown as {
     placement: string;
     locale?: string;
     stableToken?: string;
+    latitude?: number;
+    longitude?: number;
   };
 
   const flags = await getReportsFeatureFlags();
@@ -138,6 +143,8 @@ export async function getCampaignContent(
       placement: q.placement,
       locale: q.locale,
       stableToken: q.stableToken,
+      latitude: typeof q.latitude === 'number' ? q.latitude : undefined,
+      longitude: typeof q.longitude === 'number' ? q.longitude : undefined,
       sessionId: headerString(req, 'x-session-id'),
       appVersion: headerString(req, 'x-app-version'),
       platform: headerString(req, 'x-platform'),
@@ -211,7 +218,9 @@ export async function postCampaignEvent(
     userId,
   }).exec();
 
-  if (!selection || selection.invalidated) {
+  // Missing token only — allow events after refresh invalidation so dismiss/CTA
+  // analytics are not lost when they race with invalidate.
+  if (!selection) {
     res.status(404).json({ message: 'Selection not found', code: 'SELECTION_NOT_FOUND' });
     return;
   }
@@ -427,6 +436,43 @@ export async function internalPatchPromotion(
       update[key] = value;
     }
   }
+
+  // Style rules span multiple fields; validate against the merged document
+  // since a partial patch may only change one of them.
+  const existing = (await Promotion.findById(id).lean().exec()) as {
+    modalSize?: string;
+    mediaType?: string;
+    mediaUrl?: string;
+    background?: string;
+    htmlContent?: string;
+  } | null;
+  if (!existing) {
+    res.status(404).json({ message: 'Promotion not found', code: 'NOT_FOUND' });
+    return;
+  }
+  const merged = { ...existing, ...update } as {
+    modalSize?: string;
+    mediaType?: string;
+    mediaUrl?: string;
+    background?: string;
+    htmlContent?: string;
+  };
+  const styleIssues = getPromotionStyleIssues({
+    modalSize: merged.modalSize ?? 'medium',
+    mediaType: merged.mediaType ?? 'none',
+    mediaUrl: merged.mediaUrl ?? '',
+    background: merged.background ?? '',
+    htmlContent: merged.htmlContent ?? '',
+  });
+  if (styleIssues.length) {
+    res.status(400).json({
+      message: styleIssues.map((i) => i.message).join('; '),
+      code: 'INVALID_PROMOTION_STYLE',
+      issues: styleIssues,
+    });
+    return;
+  }
+
   const doc = await Promotion.findByIdAndUpdate(id, { $set: update }, { new: true }).exec();
   if (!doc) {
     res.status(404).json({ message: 'Promotion not found', code: 'NOT_FOUND' });

@@ -36,6 +36,11 @@ const surveySchema = new mongoose.Schema(
       startAt: { type: Date },
       endAt: { type: Date },
     },
+    /** Delivery audience rules; default allowAll skips filters. */
+    targetAudience: {
+      type: mongoose.Schema.Types.Mixed,
+      default: { allowAll: true },
+    },
   },
   { timestamps: true },
 );

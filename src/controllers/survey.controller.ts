@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { Survey } from '../models/survey.model';
 import type { SurveyQuestion } from '../models/survey.model';
 import { SurveyResponse } from '../models/survey-response.model';
+import { matchesTargetAudience } from '../services/audience-matching.service';
 import { translationQuestionsMismatchMessage } from '../validation/survey.validation';
 import { logger } from '../utils/logger';
 
@@ -16,6 +17,14 @@ function isDuplicateKeyError(err: unknown): boolean {
     err !== null &&
     (err as { code?: number }).code === 11000
   );
+}
+
+function headerString(req: AuthenticatedRequest, name: string): string | undefined {
+  const v = req.headers[name.toLowerCase()];
+  if (typeof v === 'string' && v.trim()) {
+    return v.trim();
+  }
+  return undefined;
 }
 
 type SurveyTranslations = Record<
@@ -34,6 +43,7 @@ function serializeSurvey(s: {
   selectionWeight?: number;
   status: string;
   schedule?: { startAt?: Date; endAt?: Date };
+  targetAudience?: unknown;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -54,6 +64,7 @@ function serializeSurvey(s: {
           endAt: s.schedule.endAt?.toISOString() ?? null,
         }
       : null,
+    targetAudience: s.targetAudience ?? { allowAll: true },
     createdAt: s.createdAt.toISOString(),
     updatedAt: s.updatedAt.toISOString(),
   };
@@ -214,12 +225,25 @@ export async function getActiveSurvey(
     return;
   }
 
-  const { placement, locale } = req.query as { placement: string; locale?: string };
+  const q = req.query as unknown as {
+    placement: string;
+    locale?: string;
+    latitude?: number;
+    longitude?: number;
+  };
   const now = new Date();
+  const audienceCtx = {
+    userId,
+    locale: q.locale,
+    platform: headerString(req, 'x-platform'),
+    appVersion: headerString(req, 'x-app-version'),
+    latitude: typeof q.latitude === 'number' ? q.latitude : undefined,
+    longitude: typeof q.longitude === 'number' ? q.longitude : undefined,
+  };
 
   const filter: Record<string, unknown> = {
     status: 'published',
-    placements: placement,
+    placements: q.placement,
     $and: [
       {
         $or: [
@@ -253,25 +277,33 @@ export async function getActiveSurvey(
         .select('_id')
         .lean()
         .exec();
-      if (!existing) {
-        const shown = displaySurveyForLocale(
-          {
-            title: s.title,
-            questions: s.questions,
-            defaultLocale: (s as { defaultLocale?: string }).defaultLocale,
-            translations: (s as { translations?: SurveyTranslations }).translations,
-          },
-          locale,
-        );
-        res.status(200).json({
-          survey: {
-            id: sid.toString(),
-            title: shown.title,
-            questions: shown.questions,
-          },
-        });
-        return;
+      if (existing) {
+        continue;
       }
+      const audienceMatch = matchesTargetAudience(
+        (s as { targetAudience?: unknown }).targetAudience,
+        audienceCtx,
+      );
+      if (!audienceMatch.matched) {
+        continue;
+      }
+      const shown = displaySurveyForLocale(
+        {
+          title: s.title,
+          questions: s.questions,
+          defaultLocale: (s as { defaultLocale?: string }).defaultLocale,
+          translations: (s as { translations?: SurveyTranslations }).translations,
+        },
+        q.locale,
+      );
+      res.status(200).json({
+        survey: {
+          id: sid.toString(),
+          title: shown.title,
+          questions: shown.questions,
+        },
+      });
+      return;
     }
 
     res.status(200).json({ survey: null });
@@ -396,6 +428,7 @@ export async function internalCreateSurvey(
     selectionWeight?: number;
     status: string;
     schedule?: { startAt?: Date; endAt?: Date };
+    targetAudience?: unknown;
   };
 
   const trErr = validateTranslationsPayload(
@@ -418,6 +451,7 @@ export async function internalCreateSurvey(
     selectionWeight: body.selectionWeight ?? body.priority,
     status: body.status,
     schedule: body.schedule,
+    targetAudience: body.targetAudience ?? { allowAll: true },
   });
 
   const s = doc.toObject();
@@ -444,6 +478,7 @@ export async function internalPatchSurvey(
     selectionWeight?: number;
     status?: string;
     schedule?: { startAt?: Date | null; endAt?: Date | null };
+    targetAudience?: unknown;
   };
 
   const existing = await Survey.findById(id).lean().exec();
@@ -505,6 +540,9 @@ export async function internalPatchSurvey(
       sched.endAt = body.schedule.endAt;
     }
     update.schedule = sched;
+  }
+  if (body.targetAudience !== undefined) {
+    update.targetAudience = body.targetAudience;
   }
 
   const doc = await Survey.findByIdAndUpdate(id, { $set: update }, { new: true }).exec();

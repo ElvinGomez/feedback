@@ -28,8 +28,28 @@ export type PromotionStatus = (typeof PROMOTION_STATUSES)[number];
 export const MODAL_SIZES = ['small', 'medium', 'full_screen'] as const;
 export type ModalSize = (typeof MODAL_SIZES)[number];
 
-export const MEDIA_TYPES = ['none', 'image', 'video'] as const;
+export const MEDIA_TYPES = ['none', 'image', 'video', 'html'] as const;
 export type MediaType = (typeof MEDIA_TYPES)[number];
+
+/**
+ * Style capabilities per modal size:
+ * - small: title + message only
+ * - medium: title, message + optional image
+ * - full_screen: title, message, background, image/video, or html content
+ */
+export const ALLOWED_MEDIA_TYPES_BY_MODAL_SIZE: Record<
+  ModalSize,
+  readonly MediaType[]
+> = {
+  small: ['none'],
+  medium: ['none', 'image'],
+  full_screen: ['none', 'image', 'video', 'html'],
+};
+
+/** Only these modal sizes may set a custom background. */
+export const BACKGROUND_ALLOWED_MODAL_SIZES: readonly ModalSize[] = [
+  'full_screen',
+];
 
 export const ACTION_TYPES = [
   'external_url',

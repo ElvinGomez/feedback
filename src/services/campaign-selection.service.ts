@@ -14,7 +14,7 @@ import { PromotionUserState } from '../models/promotion-user-state.model';
 import { Survey } from '../models/survey.model';
 import type { SurveyQuestion } from '../models/survey.model';
 import { SurveyResponse } from '../models/survey-response.model';
-import { logger } from '../utils/logger';
+import { matchesTargetAudience } from './audience-matching.service';
 
 export type WeightedItem = { id: string; weight: number };
 
@@ -128,6 +128,7 @@ type SurveyCandidate = {
   placements: string[];
   status: string;
   schedule?: { startAt?: Date; endAt?: Date };
+  targetAudience?: unknown;
 };
 
 type PromotionCandidate = {
@@ -137,6 +138,7 @@ type PromotionCandidate = {
   message?: string;
   mediaType?: string;
   mediaUrl?: string;
+  htmlContent?: string;
   mediaLayout?: string;
   textAlignment?: string;
   background?: string;
@@ -156,6 +158,7 @@ type PromotionCandidate = {
   platforms?: string[];
   minAppVersion?: string;
   maxAppVersion?: string;
+  targetAudience?: unknown;
   stats?: { impressions?: number; primaryCta?: number; secondaryCta?: number };
   defaultLocale?: string;
   translations?: Record<
@@ -218,18 +221,55 @@ function displaySurvey(
   };
 }
 
+/**
+ * Style capabilities per modal size (enforced again here so legacy or
+ * hand-edited documents never deliver disallowed content):
+ * - small: title + message only
+ * - medium: title, message + optional image
+ * - full_screen: title, message, background, image/video or html
+ */
+function sanitizeStyleForModalSize(
+  modalSize: string | undefined,
+  raw: { mediaType: string; mediaUrl: string; htmlContent: string; background: string },
+): { mediaType: string; mediaUrl: string; htmlContent: string; background: string } {
+  const size = modalSize === 'small' || modalSize === 'full_screen' ? modalSize : 'medium';
+  if (size === 'small') {
+    return { mediaType: 'none', mediaUrl: '', htmlContent: '', background: '' };
+  }
+  if (size === 'medium') {
+    const keepImage = raw.mediaType === 'image';
+    return {
+      mediaType: keepImage ? 'image' : 'none',
+      mediaUrl: keepImage ? raw.mediaUrl : '',
+      htmlContent: '',
+      background: '',
+    };
+  }
+  if (raw.mediaType === 'html') {
+    return { ...raw, mediaUrl: '' };
+  }
+  return { ...raw, htmlContent: '' };
+}
+
 function displayPromotion(promo: PromotionCandidate, locale: string | undefined) {
   const def = promo.defaultLocale ?? 'en';
   const bundle =
     locale && locale !== def ? pickTranslationBundle(promo.translations, locale) : null;
+  const style = sanitizeStyleForModalSize(promo.modalSize, {
+    mediaType: promo.mediaType ?? 'none',
+    mediaUrl: promo.mediaUrl ?? '',
+    htmlContent: promo.htmlContent ?? '',
+    background: promo.background ?? '',
+  });
   return {
     title: bundle?.title || promo.title,
     message: bundle?.message ?? promo.message ?? '',
-    mediaType: promo.mediaType ?? 'none',
-    mediaUrl: promo.mediaUrl ?? '',
+    mediaType: style.mediaType,
+    mediaUrl: style.mediaUrl,
+    htmlContent: style.htmlContent,
     mediaLayout: promo.mediaLayout ?? 'top',
     textAlignment: promo.textAlignment ?? 'center',
-    background: promo.background ?? '',
+    background: style.background,
     dismissible: promo.dismissible !== false,
     primaryAction: {
       label: bundle?.primaryAction?.label || promo.primaryAction.label,
@@ -254,11 +294,21 @@ export async function selectCampaignContent(opts: {
   sessionId?: string;
   appVersion?: string;
   platform?: string;
+  latitude?: number;
+  longitude?: number;
   stableToken?: string;
   promotionsFeatureEnabled: boolean;
   surveysFeatureEnabled: boolean;
 }): Promise<CampaignContentResult> {
   const now = new Date();
+  const audienceCtx = {
+    userId: opts.userId,
+    locale: opts.locale,
+    platform: opts.platform,
+    appVersion: opts.appVersion,
+    latitude: opts.latitude,
+    longitude: opts.longitude,
+  };
 
   if (opts.stableToken) {
     const existing = (await CampaignSelection.findOne({
@@ -286,6 +336,7 @@ export async function selectCampaignContent(opts: {
 
   const eligibleSurveys: WeightedItem[] = [];
   const surveyById = new Map<string, SurveyCandidate>();
+  const surveyRejections: Array<{ id: string; reason: string }> = [];
 
   if (opts.surveysFeatureEnabled && enabledTypes.has('survey')) {
     const surveyFilter: Record<string, unknown> = {
@@ -311,6 +362,7 @@ export async function selectCampaignContent(opts: {
     const candidates = (await Survey.find(surveyFilter).lean().exec()) as SurveyCandidate[];
     for (const s of candidates) {
       const sid = s._id;
+      const id = sid.toString();
       const answered = await SurveyResponse.findOne({
         surveyId: sid,
         userId: opts.userId,
@@ -319,14 +371,20 @@ export async function selectCampaignContent(opts: {
         .lean()
         .exec();
       if (answered) {
+        surveyRejections.push({ id, reason: 'already_answered' });
         continue;
       }
-      const id = sid.toString();
+      const audienceMatch = matchesTargetAudience(s.targetAudience, audienceCtx);
+      if (!audienceMatch.matched) {
+        surveyRejections.push({ id, reason: audienceMatch.reason });
+        continue;
+      }
       const weight =
         typeof s.selectionWeight === 'number' && Number.isFinite(s.selectionWeight)
           ? s.selectionWeight
           : s.priority ?? 0;
       if (weight <= 0) {
+        surveyRejections.push({ id, reason: 'weight_zero' });
         continue;
       }
       eligibleSurveys.push({ id, weight });
@@ -439,6 +497,13 @@ export async function selectCampaignContent(opts: {
         promoRejections.push({ id: pid, name: p.internalName, reason: `weight_zero(selectionWeight=${p.selectionWeight ?? 'undefined'})` });
         continue;
       }
+
+      const audienceMatch = matchesTargetAudience(p.targetAudience, audienceCtx);
+      if (!audienceMatch.matched) {
+        promoRejections.push({ id: pid, name: p.internalName, reason: audienceMatch.reason });
+        continue;
+      }
+
       eligiblePromotions.push({ id, weight });
       promoById.set(id, p);
     }
@@ -480,6 +545,7 @@ export async function selectCampaignContent(opts: {
     promotionsEnabled: placementConfig.promotionsEnabled !== false,
     promoGateReason,
     promoRejections: promoRejections.slice(0, 20),
+    surveyRejections: surveyRejections.slice(0, 20),
   };
 
   let contentId: string;

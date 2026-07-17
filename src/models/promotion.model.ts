@@ -34,6 +34,8 @@ const promotionSchema = new mongoose.Schema(
     message: { type: String, default: '' },
     mediaType: { type: String, enum: MEDIA_TYPES, default: 'none' },
     mediaUrl: { type: String, default: '' },
+    /** Raw HTML rendered in a WebView; only used when mediaType is `html` (full_screen). */
+    htmlContent: { type: String, default: '' },
     mediaLayout: { type: String, default: 'top' },
     textAlignment: { type: String, default: 'center' },
     background: { type: String, default: '' },

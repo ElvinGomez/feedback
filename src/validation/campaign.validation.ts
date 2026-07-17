@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import {
   ACTION_TYPES,
+  ALLOWED_MEDIA_TYPES_BY_MODAL_SIZE,
+  BACKGROUND_ALLOWED_MODAL_SIZES,
   CAMPAIGN_EVENT_TYPES,
   CAMPAIGN_PLACEMENTS,
   FREQUENCY_RULES,
@@ -9,12 +11,19 @@ import {
   MODAL_SIZES,
   PROMOTION_PLACEMENTS_V1,
   PROMOTION_STATUSES,
+  type MediaType,
+  type ModalSize,
 } from '../constants/campaign.constants';
+import {
+  optionalLatLngQuerySchema,
+  targetAudienceSchema,
+} from './target-audience.validation';
 
 export const campaignContentQuerySchema = z.object({
   placement: z.enum(CAMPAIGN_PLACEMENTS),
   locale: z.string().min(2).max(32).optional(),
   stableToken: z.string().uuid().optional(),
+  ...optionalLatLngQuerySchema,
 });
 
 export const campaignEventBodySchema = z.object({
@@ -41,6 +50,74 @@ const actionSchema = z.object({
   value: z.string().max(2000).default(''),
 });
 
+export type PromotionStyleInput = {
+  modalSize: string;
+  mediaType: string;
+  mediaUrl: string;
+  background: string;
+  htmlContent: string;
+};
+
+export type PromotionStyleIssue = {
+  path: (string | number)[];
+  message: string;
+};
+
+/**
+ * Per-modal-size style rules shared by create validation and patch enforcement:
+ * - small: title + message only (no media, no background, no html)
+ * - medium: optional image only (no video/html, no background)
+ * - full_screen: background, image/video, or html content
+ */
+export function getPromotionStyleIssues(
+  input: PromotionStyleInput,
+): PromotionStyleIssue[] {
+  const issues: PromotionStyleIssue[] = [];
+  const modalSize = (MODAL_SIZES as readonly string[]).includes(input.modalSize)
+    ? (input.modalSize as ModalSize)
+    : 'medium';
+  const allowedMedia = ALLOWED_MEDIA_TYPES_BY_MODAL_SIZE[modalSize];
+
+  if (!allowedMedia.includes(input.mediaType as MediaType)) {
+    issues.push({
+      path: ['mediaType'],
+      message: `mediaType "${input.mediaType}" is not allowed for modalSize "${modalSize}" (allowed: ${allowedMedia.join(', ')})`,
+    });
+  }
+  if (
+    input.background.trim() &&
+    !BACKGROUND_ALLOWED_MODAL_SIZES.includes(modalSize)
+  ) {
+    issues.push({
+      path: ['background'],
+      message: `background is only allowed for modalSize "full_screen"`,
+    });
+  }
+  if (input.mediaType === 'html') {
+    if (!input.htmlContent.trim()) {
+      issues.push({
+        path: ['htmlContent'],
+        message: 'htmlContent is required when mediaType is html',
+      });
+    }
+  } else if (input.htmlContent.trim()) {
+    issues.push({
+      path: ['htmlContent'],
+      message: 'htmlContent is only allowed when mediaType is html',
+    });
+  }
+  if (
+    (input.mediaType === 'image' || input.mediaType === 'video') &&
+    !input.mediaUrl.trim()
+  ) {
+    issues.push({
+      path: ['mediaUrl'],
+      message: 'mediaUrl is required when mediaType is image or video',
+    });
+  }
+  return issues;
+}
+
 const promotionTranslationBundleSchema = z.object({
   title: z.string().optional(),
   message: z.string().optional(),
@@ -66,6 +143,7 @@ export const internalCreatePromotionBodySchema = z
     message: z.string().max(4000).default(''),
     mediaType: z.enum(MEDIA_TYPES).default('none'),
     mediaUrl: z.string().max(2000).default(''),
+    htmlContent: z.string().max(100000).default(''),
     mediaLayout: z.string().max(32).optional(),
     textAlignment: z.string().max(32).optional(),
     background: z.string().max(64).optional(),
@@ -88,14 +166,21 @@ export const internalCreatePromotionBodySchema = z
     platforms: z.array(z.enum(['ios', 'android'])).optional(),
     minAppVersion: z.string().max(32).optional(),
     maxAppVersion: z.string().max(32).optional(),
-    targetAudience: z.record(z.unknown()).optional(),
+    targetAudience: targetAudienceSchema.optional(),
   })
   .superRefine((val, ctx) => {
-    if (val.mediaType !== 'none' && !val.mediaUrl.trim()) {
+    const styleIssues = getPromotionStyleIssues({
+      modalSize: val.modalSize,
+      mediaType: val.mediaType,
+      mediaUrl: val.mediaUrl,
+      background: val.background ?? '',
+      htmlContent: val.htmlContent,
+    });
+    for (const issue of styleIssues) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'mediaUrl is required when mediaType is image or video',
-        path: ['mediaUrl'],
+        message: issue.message,
+        path: issue.path,
       });
     }
     if (val.primaryAction.type !== 'dismiss_only' && !val.primaryAction.value.trim()) {
@@ -139,6 +224,7 @@ const promotionFieldsSchema = z.object({
   message: z.string().max(4000),
   mediaType: z.enum(MEDIA_TYPES),
   mediaUrl: z.string().max(2000),
+  htmlContent: z.string().max(100000),
   mediaLayout: z.string().max(32).optional(),
   textAlignment: z.string().max(32).optional(),
   background: z.string().max(64).optional(),
@@ -161,7 +247,7 @@ const promotionFieldsSchema = z.object({
   platforms: z.array(z.enum(['ios', 'android'])).optional(),
   minAppVersion: z.string().max(32).optional(),
   maxAppVersion: z.string().max(32).optional(),
-  targetAudience: z.record(z.unknown()).optional(),
+  targetAudience: targetAudienceSchema.optional(),
 });
 
 export const internalPatchPromotionBodySchema = promotionFieldsSchema.partial();
