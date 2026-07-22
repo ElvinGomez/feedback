@@ -644,11 +644,20 @@ export async function internalSurveyResponseStats(
   }
 
   const surveyObjectId = new mongoose.Types.ObjectId(id);
+  const survey = (await Survey.findById(surveyObjectId).lean().exec()) as {
+    questions?: SurveyQuestion[];
+  } | null;
+  if (!survey) {
+    res.status(404).json({ message: 'Survey not found', code: 'NOT_FOUND' });
+    return;
+  }
+
+  const questions = (survey.questions ?? []) as SurveyQuestion[];
   const now = new Date();
   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  const [total, last24Hours, last7Days, byPlacement, latest] =
+  const [total, last24Hours, last7Days, byPlacement, latest, valueCounts] =
     await Promise.all([
       SurveyResponse.countDocuments({ surveyId: surveyObjectId }).exec(),
       SurveyResponse.countDocuments({
@@ -669,9 +678,166 @@ export async function internalSurveyResponseStats(
         .select({ createdAt: 1 })
         .lean()
         .exec(),
+      SurveyResponse.aggregate<{
+        _id: { questionId: string; value: unknown };
+        count: number;
+        avgLength: number | null;
+      }>([
+        { $match: { surveyId: surveyObjectId } },
+        {
+          $project: {
+            pairs: {
+              $objectToArray: { $ifNull: ['$answers', {}] },
+            },
+          },
+        },
+        { $unwind: '$pairs' },
+        {
+          $group: {
+            _id: { questionId: '$pairs.k', value: '$pairs.v' },
+            count: { $sum: 1 },
+            avgLength: {
+              $avg: {
+                $cond: [
+                  { $eq: [{ $type: '$pairs.v' }, 'string'] },
+                  { $strLenCP: '$pairs.v' },
+                  null,
+                ],
+              },
+            },
+          },
+        },
+      ]).exec(),
     ]);
 
   const latestRow = latest as { createdAt?: Date } | null;
+
+  type Bucket = {
+    value: unknown;
+    count: number;
+    avgLength: number | null;
+  };
+  const byQuestionId = new Map<string, Bucket[]>();
+  for (const row of valueCounts) {
+    const questionId = String(row._id.questionId ?? '');
+    if (!questionId) continue;
+    const list = byQuestionId.get(questionId) ?? [];
+    list.push({
+      value: row._id.value,
+      count: row.count,
+      avgLength: row.avgLength,
+    });
+    byQuestionId.set(questionId, list);
+  }
+
+  const questionStats = questions.map((q) => {
+    const buckets = byQuestionId.get(q.id) ?? [];
+    const answered = buckets.reduce((sum, b) => sum + b.count, 0);
+
+    const base = {
+      questionId: q.id,
+      type: q.type,
+      label: q.label,
+      answered,
+    };
+
+    if (q.type === 'nps' || q.type === 'rating') {
+      let weightedSum = 0;
+      let numericCount = 0;
+      const distribution = buckets
+        .map((b) => {
+          const n = Number(b.value);
+          if (!Number.isFinite(n)) return null;
+          weightedSum += n * b.count;
+          numericCount += b.count;
+          return { value: n, count: b.count, label: String(n) };
+        })
+        .filter((b): b is { value: number; count: number; label: string } => b != null)
+        .sort((a, b) => a.value - b.value);
+
+      const average =
+        numericCount > 0
+          ? Math.round((weightedSum / numericCount) * 100) / 100
+          : null;
+
+      if (q.type === 'nps') {
+        let promoters = 0;
+        let passives = 0;
+        let detractors = 0;
+        for (const b of distribution) {
+          if (b.value >= 9) promoters += b.count;
+          else if (b.value >= 7) passives += b.count;
+          else detractors += b.count;
+        }
+        const npsBase = promoters + passives + detractors;
+        const score =
+          npsBase > 0
+            ? Math.round(((promoters - detractors) / npsBase) * 100)
+            : null;
+        return {
+          ...base,
+          average,
+          distribution,
+          nps: {
+            score,
+            promoters,
+            passives,
+            detractors,
+          },
+        };
+      }
+
+      return {
+        ...base,
+        average,
+        distribution,
+        min: q.min ?? 1,
+        max: q.max ?? 5,
+      };
+    }
+
+    if (q.type === 'single_choice') {
+      const optionLabel = new Map(
+        (q.options ?? []).map((o) => [o.id, o.label] as const),
+      );
+      const distribution = buckets
+        .map((b) => {
+          const value = String(b.value ?? '');
+          return {
+            value,
+            count: b.count,
+            label: optionLabel.get(value) ?? value,
+          };
+        })
+        .sort((a, b) => b.count - a.count);
+      return {
+        ...base,
+        distribution,
+      };
+    }
+
+    // open_text
+    let nonEmpty = 0;
+    let lengthWeighted = 0;
+    let lengthSamples = 0;
+    for (const b of buckets) {
+      const text = typeof b.value === 'string' ? b.value : String(b.value ?? '');
+      if (text.trim().length > 0) nonEmpty += b.count;
+      if (typeof b.avgLength === 'number' && Number.isFinite(b.avgLength)) {
+        lengthWeighted += b.avgLength * b.count;
+        lengthSamples += b.count;
+      }
+    }
+    return {
+      ...base,
+      nonEmpty,
+      empty: Math.max(0, answered - nonEmpty),
+      averageLength:
+        lengthSamples > 0
+          ? Math.round((lengthWeighted / lengthSamples) * 10) / 10
+          : null,
+    };
+  });
 
   res.status(200).json({
     total,
@@ -682,5 +848,6 @@ export async function internalSurveyResponseStats(
       count: row.count,
     })),
     lastResponseAt: latestRow?.createdAt ?? null,
+    questions: questionStats,
   });
 }
