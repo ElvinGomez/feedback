@@ -49,6 +49,7 @@ export const internalListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum(['pending', 'reviewed', 'dismissed']).optional(),
   targetType: reportTargetTypeSchema.optional(),
+  reason: z.string().min(1).max(64).optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
 });

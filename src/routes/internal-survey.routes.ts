@@ -5,6 +5,7 @@ import {
   internalListSurveyResponses,
   internalListSurveys,
   internalPatchSurvey,
+  internalSurveyResponseStats,
 } from '../controllers/survey.controller';
 import { validate } from '../middleware/validation.middleware';
 import {
@@ -42,6 +43,12 @@ router.patch(
   validate(idParamSchema, 'params'),
   validate(internalPatchSurveyBodySchema),
   internalPatchSurvey,
+);
+
+router.get(
+  '/:id/responses/stats',
+  validate(idParamSchema, 'params'),
+  internalSurveyResponseStats,
 );
 
 router.get(

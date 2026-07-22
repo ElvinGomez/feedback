@@ -586,17 +586,26 @@ export async function internalListSurveyResponses(
     return;
   }
 
-  const q = req.query as unknown as { page: number; limit: number };
+  const q = req.query as unknown as {
+    page: number;
+    limit: number;
+    placement?: string;
+  };
   const skip = (q.page - 1) * q.limit;
 
+  const filter: Record<string, unknown> = { surveyId: id };
+  if (q.placement) {
+    filter.placement = q.placement;
+  }
+
   const [items, total] = await Promise.all([
-    SurveyResponse.find({ surveyId: id })
+    SurveyResponse.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(q.limit)
       .lean()
       .exec(),
-    SurveyResponse.countDocuments({ surveyId: id }).exec(),
+    SurveyResponse.countDocuments(filter).exec(),
   ]);
 
   res.status(200).json({
@@ -621,5 +630,57 @@ export async function internalListSurveyResponses(
     page: q.page,
     limit: q.limit,
     total,
+  });
+}
+
+export async function internalSurveyResponseStats(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res.status(400).json({ message: 'Invalid id', code: 'INVALID_ID' });
+    return;
+  }
+
+  const surveyObjectId = new mongoose.Types.ObjectId(id);
+  const now = new Date();
+  const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  const [total, last24Hours, last7Days, byPlacement, latest] =
+    await Promise.all([
+      SurveyResponse.countDocuments({ surveyId: surveyObjectId }).exec(),
+      SurveyResponse.countDocuments({
+        surveyId: surveyObjectId,
+        createdAt: { $gte: dayAgo },
+      }).exec(),
+      SurveyResponse.countDocuments({
+        surveyId: surveyObjectId,
+        createdAt: { $gte: weekAgo },
+      }).exec(),
+      SurveyResponse.aggregate<{ _id: string; count: number }>([
+        { $match: { surveyId: surveyObjectId } },
+        { $group: { _id: '$placement', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]).exec(),
+      SurveyResponse.findOne({ surveyId: surveyObjectId })
+        .sort({ createdAt: -1 })
+        .select({ createdAt: 1 })
+        .lean()
+        .exec(),
+    ]);
+
+  const latestRow = latest as { createdAt?: Date } | null;
+
+  res.status(200).json({
+    total,
+    last24Hours,
+    last7Days,
+    byPlacement: byPlacement.map((row) => ({
+      placement: row._id,
+      count: row.count,
+    })),
+    lastResponseAt: latestRow?.createdAt ?? null,
   });
 }

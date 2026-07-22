@@ -97,6 +97,7 @@ export async function internalListReports(
     limit: number;
     status?: string;
     targetType?: string;
+    reason?: string;
     from?: Date;
     to?: Date;
   };
@@ -107,6 +108,9 @@ export async function internalListReports(
   }
   if (q.targetType) {
     filter.targetType = q.targetType;
+  }
+  if (q.reason) {
+    filter.reason = q.reason;
   }
   if (q.from || q.to) {
     filter.createdAt = {};
