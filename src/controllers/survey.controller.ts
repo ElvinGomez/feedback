@@ -414,6 +414,27 @@ export async function internalListSurveys(
   });
 }
 
+export async function internalGetSurvey(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res.status(400).json({ message: 'Invalid id', code: 'INVALID_ID' });
+    return;
+  }
+
+  const doc = await Survey.findById(id).lean().exec();
+  if (!doc) {
+    res.status(404).json({ message: 'Survey not found', code: 'NOT_FOUND' });
+    return;
+  }
+
+  res.status(200).json(
+    serializeSurvey(doc as Parameters<typeof serializeSurvey>[0]),
+  );
+}
+
 export async function internalCreateSurvey(
   req: AuthenticatedRequest,
   res: Response,

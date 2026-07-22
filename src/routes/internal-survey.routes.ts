@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   internalCreateSurvey,
+  internalGetSurvey,
   internalListSurveyResponses,
   internalListSurveys,
   internalPatchSurvey,
@@ -29,6 +30,12 @@ router.get(
 );
 
 router.post('/', validate(internalCreateSurveyBodySchema), internalCreateSurvey);
+
+router.get(
+  '/:id',
+  validate(idParamSchema, 'params'),
+  internalGetSurvey,
+);
 
 router.patch(
   '/:id',
