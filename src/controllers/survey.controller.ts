@@ -633,6 +633,70 @@ export async function internalListSurveyResponses(
   });
 }
 
+export async function internalExportSurveyResponses(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res.status(400).json({ message: 'Invalid id', code: 'INVALID_ID' });
+    return;
+  }
+
+  const survey = (await Survey.findById(id).lean().exec()) as {
+    title?: string;
+    questions?: SurveyQuestion[];
+  } | null;
+  if (!survey) {
+    res.status(404).json({ message: 'Survey not found', code: 'NOT_FOUND' });
+    return;
+  }
+
+  const q = req.query as unknown as { placement?: string; limit: number };
+  const filter: Record<string, unknown> = { surveyId: id };
+  if (q.placement) {
+    filter.placement = q.placement;
+  }
+
+  const [items, total] = await Promise.all([
+    SurveyResponse.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(q.limit)
+      .lean()
+      .exec(),
+    SurveyResponse.countDocuments(filter).exec(),
+  ]);
+
+  res.status(200).json({
+    surveyId: id,
+    title: survey.title ?? '',
+    questions: (survey.questions ?? []) as SurveyQuestion[],
+    placementFilter: q.placement ?? null,
+    exportedAt: new Date().toISOString(),
+    truncated: total > items.length,
+    total,
+    limit: q.limit,
+    items: items.map((r) => {
+      const row = r as {
+        _id: mongoose.Types.ObjectId;
+        surveyId: mongoose.Types.ObjectId;
+        userId: string;
+        placement: string;
+        answers: unknown;
+        createdAt: Date;
+      };
+      return {
+        id: row._id.toString(),
+        surveyId: String(row.surveyId),
+        userId: row.userId,
+        placement: row.placement,
+        answers: row.answers,
+        createdAt: row.createdAt,
+      };
+    }),
+  });
+}
+
 export async function internalSurveyResponseStats(
   req: AuthenticatedRequest,
   res: Response,

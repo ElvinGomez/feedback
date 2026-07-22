@@ -101,6 +101,12 @@ export const internalSurveyResponsesQuerySchema = z.object({
   placement: z.string().min(1).optional(),
 });
 
+export const internalSurveyResponsesExportQuerySchema = z.object({
+  placement: z.string().min(1).optional(),
+  /** Soft cap to protect the service; default keeps analysis exports practical. */
+  limit: z.coerce.number().int().min(1).max(10000).default(5000),
+});
+
 /** Ensures translated questions mirror primary ids/types/option ids (labels may differ). */
 export function translationQuestionsMismatchMessage(
   base: SurveyQuestion[],

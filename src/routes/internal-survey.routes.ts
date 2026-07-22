@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   internalCreateSurvey,
+  internalExportSurveyResponses,
   internalGetSurvey,
   internalListSurveyResponses,
   internalListSurveys,
@@ -12,6 +13,7 @@ import {
   internalCreateSurveyBodySchema,
   internalPatchSurveyBodySchema,
   internalSurveyListQuerySchema,
+  internalSurveyResponsesExportQuerySchema,
   internalSurveyResponsesQuerySchema,
 } from '../validation/survey.validation';
 import { z } from 'zod';
@@ -49,6 +51,13 @@ router.get(
   '/:id/responses/stats',
   validate(idParamSchema, 'params'),
   internalSurveyResponseStats,
+);
+
+router.get(
+  '/:id/responses/export',
+  validate(idParamSchema, 'params'),
+  validate(internalSurveyResponsesExportQuerySchema, 'query'),
+  internalExportSurveyResponses,
 );
 
 router.get(
