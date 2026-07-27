@@ -13,6 +13,7 @@ import { PromotionUserState } from '../models/promotion-user-state.model';
 import { selectCampaignContent } from '../services/campaign-selection.service';
 import { getReportsFeatureFlags } from '../services/feature-flags-cache.service';
 import { getPromotionStyleIssues } from '../validation/campaign.validation';
+import { GEO_BUCKET_DECIMALS, bucketLatLng } from '../utils/geo-bucket';
 import { logger } from '../utils/logger';
 
 function isDuplicateKeyError(err: unknown): boolean {
@@ -274,7 +275,7 @@ export async function postCampaignEvent(
       destinationValue: body.destinationValue,
       interactionType: body.interactionType,
       ...(hasEventLocation
-        ? { latitude: body.latitude, longitude: body.longitude }
+        ? bucketLatLng(body.latitude!, body.longitude!)
         : {}),
       selectionAudit: selection.selectionAudit,
       metadata: body.metadata,
@@ -508,6 +509,8 @@ export async function internalGetPromotionReport(
     return;
   }
 
+  const geoBucketScale = 10 ** GEO_BUCKET_DECIMALS;
+
   const [events, impressionLocations, locationCounts] = await Promise.all([
     CampaignEvent.aggregate([
       { $match: { contentId: id } },
@@ -524,17 +527,46 @@ export async function internalGetPromotionReport(
       },
       { $sort: { '_id.day': 1 } },
     ]).exec(),
-    CampaignEvent.find({
-      contentId: id,
-      eventType: 'promotion_impression',
-      latitude: { $type: 'number' },
-      longitude: { $type: 'number' },
-    })
-      .select({ latitude: 1, longitude: 1, platform: 1, createdAt: 1 })
-      .sort({ createdAt: -1 })
-      .limit(1000)
-      .lean()
-      .exec(),
+    CampaignEvent.aggregate([
+      {
+        $match: {
+          contentId: id,
+          eventType: 'promotion_impression',
+          $expr: {
+            $and: [{ $isNumber: '$latitude' }, { $isNumber: '$longitude' }],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            latitude: {
+              $divide: [
+                { $floor: { $multiply: ['$latitude', geoBucketScale] } },
+                geoBucketScale,
+              ],
+            },
+            longitude: {
+              $divide: [
+                { $floor: { $multiply: ['$longitude', geoBucketScale] } },
+                geoBucketScale,
+              ],
+            },
+          },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { count: -1 } },
+      { $limit: 500 },
+      {
+        $project: {
+          _id: 0,
+          latitude: '$_id.latitude',
+          longitude: '$_id.longitude',
+          count: 1,
+        },
+      },
+    ]).exec(),
     CampaignEvent.aggregate([
       {
         $match: {
@@ -581,14 +613,16 @@ export async function internalGetPromotionReport(
       impressionsWithoutLocation: Math.max(0, impressionEventTotal - withLocation),
     },
     series: events,
-    impressionLocations: impressionLocations.map((row) => ({
-      latitude: row.latitude as number,
-      longitude: row.longitude as number,
-      platform: typeof row.platform === 'string' ? row.platform : undefined,
-      createdAt:
-        row.createdAt instanceof Date
-          ? row.createdAt.toISOString()
-          : String(row.createdAt ?? ''),
+    impressionLocations: (
+      impressionLocations as Array<{
+        latitude: number;
+        longitude: number;
+        count: number;
+      }>
+    ).map((row) => ({
+      latitude: row.latitude,
+      longitude: row.longitude,
+      count: row.count,
     })),
   });
 }
