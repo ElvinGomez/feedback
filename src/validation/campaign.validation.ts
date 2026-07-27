@@ -26,19 +26,34 @@ export const campaignContentQuerySchema = z.object({
   ...optionalLatLngQuerySchema,
 });
 
-export const campaignEventBodySchema = z.object({
-  eventId: z.string().min(1).optional(),
-  idempotencyKey: z.string().min(8).max(200),
-  eventType: z.enum(CAMPAIGN_EVENT_TYPES),
-  selectionToken: z.string().uuid(),
-  sessionId: z.string().min(1).max(128).optional(),
-  appVersion: z.string().max(32).optional(),
-  platform: z.enum(['ios', 'android']).optional(),
-  destinationType: z.enum(ACTION_TYPES).optional(),
-  destinationValue: z.string().max(2000).optional(),
-  interactionType: z.string().max(64).optional(),
-  metadata: z.record(z.unknown()).optional(),
-});
+export const campaignEventBodySchema = z
+  .object({
+    eventId: z.string().min(1).optional(),
+    idempotencyKey: z.string().min(8).max(200),
+    eventType: z.enum(CAMPAIGN_EVENT_TYPES),
+    selectionToken: z.string().uuid(),
+    sessionId: z.string().min(1).max(128).optional(),
+    appVersion: z.string().max(32).optional(),
+    platform: z.enum(['ios', 'android']).optional(),
+    destinationType: z.enum(ACTION_TYPES).optional(),
+    destinationValue: z.string().max(2000).optional(),
+    interactionType: z.string().max(64).optional(),
+    /** Client location at event time (impression map analytics). */
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+    metadata: z.record(z.unknown()).optional(),
+  })
+  .superRefine((val, ctx) => {
+    const hasLat = val.latitude !== undefined;
+    const hasLng = val.longitude !== undefined;
+    if (hasLat !== hasLng) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'latitude and longitude must both be provided',
+        path: hasLat ? ['longitude'] : ['latitude'],
+      });
+    }
+  });
 
 export const campaignRefreshBodySchema = z.object({
   selectionToken: z.string().uuid(),

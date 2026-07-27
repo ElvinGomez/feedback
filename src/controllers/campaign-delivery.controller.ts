@@ -210,8 +210,16 @@ export async function postCampaignEvent(
     destinationType?: string;
     destinationValue?: string;
     interactionType?: string;
+    latitude?: number;
+    longitude?: number;
     metadata?: Record<string, unknown>;
   };
+
+  const hasEventLocation =
+    typeof body.latitude === 'number' &&
+    Number.isFinite(body.latitude) &&
+    typeof body.longitude === 'number' &&
+    Number.isFinite(body.longitude);
 
   const selection = await CampaignSelection.findOne({
     token: body.selectionToken,
@@ -265,6 +273,9 @@ export async function postCampaignEvent(
       destinationType: body.destinationType,
       destinationValue: body.destinationValue,
       interactionType: body.interactionType,
+      ...(hasEventLocation
+        ? { latitude: body.latitude, longitude: body.longitude }
+        : {}),
       selectionAudit: selection.selectionAudit,
       metadata: body.metadata,
     });
@@ -497,34 +508,88 @@ export async function internalGetPromotionReport(
     return;
   }
 
-  const events = await CampaignEvent.aggregate([
-    { $match: { contentId: id } },
-    {
-      $group: {
-        _id: {
-          day: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-          eventType: '$eventType',
-          platform: '$platform',
-          appVersion: '$appVersion',
+  const [events, impressionLocations, locationCounts] = await Promise.all([
+    CampaignEvent.aggregate([
+      { $match: { contentId: id } },
+      {
+        $group: {
+          _id: {
+            day: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            eventType: '$eventType',
+            platform: '$platform',
+            appVersion: '$appVersion',
+          },
+          count: { $sum: 1 },
         },
-        count: { $sum: 1 },
       },
-    },
-    { $sort: { '_id.day': 1 } },
-  ]).exec();
+      { $sort: { '_id.day': 1 } },
+    ]).exec(),
+    CampaignEvent.find({
+      contentId: id,
+      eventType: 'promotion_impression',
+      latitude: { $type: 'number' },
+      longitude: { $type: 'number' },
+    })
+      .select({ latitude: 1, longitude: 1, platform: 1, createdAt: 1 })
+      .sort({ createdAt: -1 })
+      .limit(1000)
+      .lean()
+      .exec(),
+    CampaignEvent.aggregate([
+      {
+        $match: {
+          contentId: id,
+          eventType: 'promotion_impression',
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          withLocation: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $isNumber: '$latitude' },
+                    { $isNumber: '$longitude' },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+          total: { $sum: 1 },
+        },
+      },
+    ]).exec(),
+  ]);
 
   const stats = (promo as { stats?: Record<string, number> }).stats ?? {};
   const impressions = stats.impressions ?? 0;
   const primaryCta = stats.primaryCta ?? 0;
   const ctr = impressions > 0 ? primaryCta / impressions : 0;
+  const withLocation = locationCounts[0]?.withLocation ?? 0;
+  const impressionEventTotal = locationCounts[0]?.total ?? 0;
 
   res.status(200).json({
     promotionId: id,
     stats: {
       ...stats,
       clickThroughRate: ctr,
+      impressionsWithLocation: withLocation,
+      impressionsWithoutLocation: Math.max(0, impressionEventTotal - withLocation),
     },
     series: events,
+    impressionLocations: impressionLocations.map((row) => ({
+      latitude: row.latitude as number,
+      longitude: row.longitude as number,
+      platform: typeof row.platform === 'string' ? row.platform : undefined,
+      createdAt:
+        row.createdAt instanceof Date
+          ? row.createdAt.toISOString()
+          : String(row.createdAt ?? ''),
+    })),
   });
 }
 

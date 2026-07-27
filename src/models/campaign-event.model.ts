@@ -19,6 +19,8 @@ const campaignEventSchema = new mongoose.Schema(
     destinationType: { type: String },
     destinationValue: { type: String },
     interactionType: { type: String },
+    latitude: { type: Number },
+    longitude: { type: Number },
     selectionAudit: { type: mongoose.Schema.Types.Mixed },
     metadata: { type: mongoose.Schema.Types.Mixed },
   },
@@ -27,6 +29,12 @@ const campaignEventSchema = new mongoose.Schema(
 
 campaignEventSchema.index({ contentId: 1, eventType: 1, createdAt: -1 });
 campaignEventSchema.index({ placement: 1, createdAt: -1 });
+campaignEventSchema.index({
+  contentId: 1,
+  eventType: 1,
+  latitude: 1,
+  longitude: 1,
+});
 
 export type CampaignEventDoc = mongoose.InferSchemaType<typeof campaignEventSchema> & {
   _id: mongoose.Types.ObjectId;
