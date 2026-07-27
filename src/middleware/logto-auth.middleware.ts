@@ -2,11 +2,10 @@ import type { Request, RequestHandler } from 'express';
 import type { LogtoAuthEnv } from '@tripsi-app/logto-server-auth';
 import {
   createLogtoAuth,
-  permissionPathForResourceKey,
 } from '@tripsi-app/logto-server-auth';
 import config from '../config/env';
 import type { AuthenticatedRequest } from './auth.middleware';
-import { reportRouteToFlagKey } from './reports-feature-flags.middleware';
+import { flagKeyForRequest, flagPermissionPath } from './reports-feature-flags.middleware';
 import { fetchPublicClientConfigForAuth } from '../services/public-client-config.service';
 
 export const logtoAuthEnv: LogtoAuthEnv = {
@@ -55,20 +54,11 @@ export const attachLogtoUserToLegacyRequest: RequestHandler = (
 };
 
 export function reportRouteToFeaturePath(req: Request): string | null {
-  const key = reportRouteToFlagKey(req.method, req.path);
+  const key = flagKeyForRequest(req.method, req.path, req.baseUrl || '');
   if (key === null) {
     return null;
   }
-  let perm: string;
-  if (key === 'surveys') {
-    perm = permissionPathForResourceKey('feedback', 'surveys');
-  } else if (key === 'campaignDelivery') {
-    perm = 'feedback:campaign_delivery';
-  } else if (key === 'promotions') {
-    perm = permissionPathForResourceKey('feedback', 'promotions');
-  } else {
-    perm = permissionPathForResourceKey('feedback', `reports.${key}`);
-  }
+  const perm = flagPermissionPath(key);
   return getAuth().isFeatureFlagPath(perm) ? perm : null;
 }
 

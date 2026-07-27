@@ -11,6 +11,7 @@ export type ReportsFeatureFlags = {
   delete: boolean;
   stats: boolean;
   surveys: boolean;
+  analytics: boolean;
   campaignDelivery: boolean;
   promotions: boolean;
 };
@@ -45,6 +46,9 @@ function parseReportsPayload(data: unknown): ReportsFeatureFlags | null {
         ? legacyTopReports.surveys
         : false),
   );
+  const analytics = Boolean(
+    typeof fb?.analytics === 'boolean' ? fb.analytics : false,
+  );
   const campaignDelivery = Boolean(
     typeof fb?.campaignDelivery === 'boolean' ? fb.campaignDelivery : false,
   );
@@ -60,6 +64,7 @@ function parseReportsPayload(data: unknown): ReportsFeatureFlags | null {
     delete: Boolean(p.delete),
     stats: Boolean(p.stats),
     surveys,
+    analytics,
     campaignDelivery,
     promotions,
   };

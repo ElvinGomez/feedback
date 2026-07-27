@@ -37,9 +37,37 @@ export function reportRouteToFlagKey(
   return null;
 }
 
-function flagPermissionPath(key: ReportRouteFlagKey): string {
+/**
+ * Map HTTP method + path relative to `/feedback/analytics` mount.
+ */
+export function analyticsRouteToFlagKey(
+  method: string,
+  path: string,
+): ReportRouteFlagKey | null {
+  const m = method.toUpperCase();
+  if (m === 'POST' && path === '/events') {
+    return 'analytics';
+  }
+  return null;
+}
+
+export function flagKeyForRequest(
+  method: string,
+  path: string,
+  baseUrl: string,
+): ReportRouteFlagKey | null {
+  if (baseUrl.includes('/analytics')) {
+    return analyticsRouteToFlagKey(method, path);
+  }
+  return reportRouteToFlagKey(method, path);
+}
+
+export function flagPermissionPath(key: ReportRouteFlagKey): string {
   if (key === 'surveys') {
     return permissionPathForResourceKey('feedback', 'surveys');
+  }
+  if (key === 'analytics') {
+    return 'feedback:analytics';
   }
   if (key === 'campaignDelivery') {
     return 'feedback:campaign_delivery';
@@ -60,7 +88,7 @@ export const reportsFeatureFlagsMiddleware: RequestHandler = async (
     next();
     return;
   }
-  const key = reportRouteToFlagKey(req.method, req.path);
+  const key = flagKeyForRequest(req.method, req.path, req.baseUrl || '');
   if (key === null) {
     next();
     return;
