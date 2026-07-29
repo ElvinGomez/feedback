@@ -1,5 +1,6 @@
 import express from 'express';
 import {
+  internalGetReport,
   internalListReports,
   internalPatchReport,
 } from '../controllers/content-report.controller';
@@ -16,6 +17,8 @@ router.get(
   validate(internalListQuerySchema, 'query'),
   internalListReports,
 );
+
+router.get('/:id', internalGetReport);
 
 router.patch(
   '/:id',

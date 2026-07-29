@@ -152,6 +152,36 @@ export async function internalListReports(
   });
 }
 
+export async function internalGetReport(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res.status(400).json({ message: 'Invalid id', code: 'INVALID_ID' });
+    return;
+  }
+
+  const doc = await ContentReport.findById(id).exec();
+  if (!doc) {
+    res.status(404).json({ message: 'Report not found', code: 'NOT_FOUND' });
+    return;
+  }
+
+  res.status(200).json({
+    id: doc.id,
+    targetType: doc.targetType,
+    targetId: doc.targetId,
+    reporterUserId: doc.reporterUserId,
+    reason: doc.reason,
+    comment: doc.comment,
+    status: doc.status,
+    adminNotes: doc.adminNotes ?? null,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  });
+}
+
 export async function internalPatchReport(
   req: AuthenticatedRequest,
   res: Response,
