@@ -9,6 +9,17 @@ export type ReportTargetType =
   | 'review';
 export type ReportStatus = 'pending' | 'reviewed' | 'dismissed';
 
+export interface IReportLatLng {
+  latitude: number;
+  longitude: number;
+}
+
+/** Spot pin correction for `wrong_location` reports. */
+export interface IReportLocationCorrection {
+  current: IReportLatLng;
+  suggested: IReportLatLng;
+}
+
 export interface IContentReport extends Document {
   targetType: ReportTargetType;
   targetId: string;
@@ -17,9 +28,26 @@ export interface IContentReport extends Document {
   comment: string;
   status: ReportStatus;
   adminNotes?: string;
+  locationCorrection?: IReportLocationCorrection;
   createdAt: Date;
   updatedAt: Date;
 }
+
+const latLngSchema = new Schema<IReportLatLng>(
+  {
+    latitude: { type: Number, required: true, min: -90, max: 90 },
+    longitude: { type: Number, required: true, min: -180, max: 180 },
+  },
+  { _id: false },
+);
+
+const locationCorrectionSchema = new Schema<IReportLocationCorrection>(
+  {
+    current: { type: latLngSchema, required: true },
+    suggested: { type: latLngSchema, required: true },
+  },
+  { _id: false },
+);
 
 const contentReportSchema = new Schema<IContentReport>(
   {
@@ -41,6 +69,7 @@ const contentReportSchema = new Schema<IContentReport>(
       index: true,
     },
     adminNotes: { type: String, maxlength: 5000 },
+    locationCorrection: { type: locationCorrectionSchema, required: false },
   },
   { timestamps: true },
 );

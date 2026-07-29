@@ -11,12 +11,23 @@ export const reportTargetTypeSchema = z.enum([
   'review',
 ]);
 
+const reportLatLngSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
+
+export const locationCorrectionSchema = z.object({
+  current: reportLatLngSchema,
+  suggested: reportLatLngSchema,
+});
+
 export const createReportBodySchema = z
   .object({
     targetType: reportTargetTypeSchema,
     targetId: z.string().min(1).max(128),
     reason: z.string().min(1).max(64),
     comment: z.string().max(200).optional().default(''),
+    locationCorrection: locationCorrectionSchema.optional(),
   })
   .superRefine((data, ctx) => {
     const tt = data.targetType as ReportTargetType;
@@ -36,6 +47,22 @@ export const createReportBodySchema = z
           path: ['comment'],
         });
       }
+    }
+    const needsLocationCorrection =
+      tt === 'spot' && data.reason === 'wrong_location';
+    if (needsLocationCorrection && !data.locationCorrection) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'LOCATION_CORRECTION_REQUIRED',
+        path: ['locationCorrection'],
+      });
+    }
+    if (!needsLocationCorrection && data.locationCorrection) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'LOCATION_CORRECTION_NOT_ALLOWED',
+        path: ['locationCorrection'],
+      });
     }
   });
 

@@ -1,7 +1,10 @@
 import { Response } from 'express';
 import mongoose from 'mongoose';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
-import { ContentReport } from '../models/content-report.model';
+import {
+  ContentReport,
+  type IReportLocationCorrection,
+} from '../models/content-report.model';
 import { logger } from '../utils/logger';
 
 function isDuplicateKeyError(err: unknown): boolean {
@@ -10,6 +13,24 @@ function isDuplicateKeyError(err: unknown): boolean {
     err !== null &&
     (err as { code?: number }).code === 11000
   );
+}
+
+function serializeLocationCorrection(
+  value: IReportLocationCorrection | undefined | null,
+): IReportLocationCorrection | null {
+  if (!value?.current || !value?.suggested) {
+    return null;
+  }
+  return {
+    current: {
+      latitude: value.current.latitude,
+      longitude: value.current.longitude,
+    },
+    suggested: {
+      latitude: value.suggested.latitude,
+      longitude: value.suggested.longitude,
+    },
+  };
 }
 
 export async function createReport(
@@ -22,12 +43,14 @@ export async function createReport(
     return;
   }
 
-  const { targetType, targetId, reason, comment } = req.body as {
-    targetType: string;
-    targetId: string;
-    reason: string;
-    comment?: string;
-  };
+  const { targetType, targetId, reason, comment, locationCorrection } =
+    req.body as {
+      targetType: string;
+      targetId: string;
+      reason: string;
+      comment?: string;
+      locationCorrection?: IReportLocationCorrection;
+    };
 
   const commentTrimmed = (comment ?? '').trim();
 
@@ -39,6 +62,7 @@ export async function createReport(
       reason,
       comment: commentTrimmed,
       status: 'pending',
+      ...(locationCorrection ? { locationCorrection } : {}),
     });
     res.status(201).json({
       id: doc.id,
@@ -46,6 +70,7 @@ export async function createReport(
       targetId: doc.targetId,
       reason: doc.reason,
       status: doc.status,
+      locationCorrection: serializeLocationCorrection(doc.locationCorrection),
       createdAt: doc.createdAt,
     });
   } catch (err) {
@@ -143,6 +168,9 @@ export async function internalListReports(
       comment: r.comment,
       status: r.status,
       adminNotes: r.adminNotes ?? null,
+      locationCorrection: serializeLocationCorrection(
+        r.locationCorrection as IReportLocationCorrection | undefined,
+      ),
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
     })),
@@ -177,6 +205,7 @@ export async function internalGetReport(
     comment: doc.comment,
     status: doc.status,
     adminNotes: doc.adminNotes ?? null,
+    locationCorrection: serializeLocationCorrection(doc.locationCorrection),
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   });
@@ -221,6 +250,7 @@ export async function internalPatchReport(
     comment: doc.comment,
     status: doc.status,
     adminNotes: doc.adminNotes ?? null,
+    locationCorrection: serializeLocationCorrection(doc.locationCorrection),
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   });
