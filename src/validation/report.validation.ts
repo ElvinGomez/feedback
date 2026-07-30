@@ -2,6 +2,9 @@ import { z } from 'zod';
 import type { ReportTargetType } from '../models/content-report.model';
 import { isValidReasonForTarget } from '../constants/report-reasons';
 
+/** ~10m at the equator; keep in sync with mobile ReportContentModal. */
+const LOCATION_MOVED_EPSILON = 1e-4;
+
 export const reportTargetTypeSchema = z.enum([
   'spot',
   'spot_image',
@@ -20,6 +23,16 @@ export const locationCorrectionSchema = z.object({
   current: reportLatLngSchema,
   suggested: reportLatLngSchema,
 });
+
+function isSameLocation(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+): boolean {
+  return (
+    Math.abs(a.latitude - b.latitude) < LOCATION_MOVED_EPSILON &&
+    Math.abs(a.longitude - b.longitude) < LOCATION_MOVED_EPSILON
+  );
+}
 
 export const createReportBodySchema = z
   .object({
@@ -55,6 +68,19 @@ export const createReportBodySchema = z
         code: z.ZodIssueCode.custom,
         message: 'LOCATION_CORRECTION_REQUIRED',
         path: ['locationCorrection'],
+      });
+    } else if (
+      needsLocationCorrection &&
+      data.locationCorrection &&
+      isSameLocation(
+        data.locationCorrection.current,
+        data.locationCorrection.suggested,
+      )
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'LOCATION_CORRECTION_MUST_DIFFER',
+        path: ['locationCorrection', 'suggested'],
       });
     }
     if (!needsLocationCorrection && data.locationCorrection) {
