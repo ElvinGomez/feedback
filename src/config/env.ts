@@ -17,4 +17,11 @@ export default {
     process.env.FEEDBACK_INTERNAL_API_KEY?.trim() ||
     process.env.REPORTS_INTERNAL_API_KEY?.trim() ||
     '',
+  userManagementServiceBaseUrl:
+    process.env.USER_MANAGEMENT_SERVICE_BASE_URL?.trim().replace(/\/+$/, '') || '',
+  usersInternalApiKey: process.env.USERS_INTERNAL_API_KEY?.trim() || '',
+  userSuspensionCacheMs: Math.max(
+    1000,
+    Number(process.env.USER_SUSPENSION_CACHE_MS) || 30_000,
+  ),
 };

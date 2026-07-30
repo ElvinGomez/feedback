@@ -28,6 +28,7 @@ import {
   requireReportPermission,
 } from './middleware/logto-auth.middleware';
 import { requireInternalApiKey } from './middleware/internal-auth.middleware';
+import { requireNotSuspended } from './middleware/require-not-suspended.middleware';
 
 const app = express();
 
@@ -58,6 +59,7 @@ function buildPublicFeedbackStack(): express.Router {
   stack.use(reportsFeatureFlagsMiddleware);
   stack.use(requireLogto);
   stack.use(attachLogtoUserToLegacyRequest);
+  stack.use(requireNotSuspended);
   stack.use(requireReportPermission);
   return stack;
 }
