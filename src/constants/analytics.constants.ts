@@ -10,6 +10,7 @@ export const ANALYTICS_EVENT_NAMES = [
   'review_submitted',
   'profile_updated',
   'profile_shared',
+  'profile_social_link_opened',
   'trip_plan_started',
   'trip_plan_completed',
   'ai_chat_message_sent',
