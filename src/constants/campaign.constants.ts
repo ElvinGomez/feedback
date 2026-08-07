@@ -3,6 +3,8 @@ export const CAMPAIGN_PLACEMENTS = [
   'spot_detail',
   'app_launch',
   'after_content_report',
+  'after_tutorial',
+  'after_capture',
   'profile',
   'explore',
 ] as const;
