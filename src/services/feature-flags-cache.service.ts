@@ -98,22 +98,18 @@ let travelModeCache: { enabled: boolean; at: number } | null = null;
 
 function parseTravelModeFlag(data: unknown): boolean | null {
   const features = (data as { features?: Record<string, unknown> })?.features;
-  const spots =
-    features?.spots && typeof features.spots === 'object'
-      ? (features.spots as Record<string, unknown>)
+  const travel =
+    features?.travel && typeof features.travel === 'object'
+      ? (features.travel as Record<string, unknown>)
       : null;
-  const discovery =
-    spots?.discovery && typeof spots.discovery === 'object'
-      ? (spots.discovery as Record<string, unknown>)
-      : null;
-  if (!discovery || typeof discovery.countrySwitch !== 'boolean') {
-    return null;
+  if (travel && typeof travel.mode === 'boolean') {
+    return travel.mode;
   }
-  return discovery.countrySwitch;
+  return null;
 }
 
 /**
- * Global Travel-mode toggle (`spots.discovery.countrySwitch`), shared across
+ * Global Travel-mode toggle (`travel.mode`), shared across
  * every service — must match spots' own reading of the same config leaf.
  */
 export async function getGlobalTravelModeFlag(): Promise<boolean | null> {
