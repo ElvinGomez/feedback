@@ -25,13 +25,27 @@ const ERROR_CODE = {
     name: 'RATE_LIMIT',
     reason: 'To many requests',
   },
+  COUNTRY_MISMATCH: {
+    code: 816,
+    status: 403,
+    name: 'COUNTRY_MISMATCH',
+    reason: 'Your location or network origin does not match the requested country',
+  },
+  COUNTRY_NOT_ALLOWED: {
+    code: 817,
+    status: 403,
+    name: 'COUNTRY_NOT_ALLOWED',
+    reason: 'This country is not allowed for this action',
+  },
 };
 
 export type ApiErrorKeys =
   | 'NOT_FOUND'
   | 'INTERNAL_SERVER_ERROR'
   | 'CLIENT_UNAUTHORIZED'
-  | 'RATE_LIMIT';
+  | 'RATE_LIMIT'
+  | 'COUNTRY_MISMATCH'
+  | 'COUNTRY_NOT_ALLOWED';
 
 export class ApiError extends BaseError {
   constructor(name: ApiErrorKeys = 'INTERNAL_SERVER_ERROR') {

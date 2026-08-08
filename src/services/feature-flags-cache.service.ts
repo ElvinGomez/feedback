@@ -93,3 +93,49 @@ export async function getReportsFeatureFlags(): Promise<ReportsFeatureFlags | nu
     return cache?.flags ?? null;
   }
 }
+
+let travelModeCache: { enabled: boolean; at: number } | null = null;
+
+function parseTravelModeFlag(data: unknown): boolean | null {
+  const features = (data as { features?: Record<string, unknown> })?.features;
+  const spots =
+    features?.spots && typeof features.spots === 'object'
+      ? (features.spots as Record<string, unknown>)
+      : null;
+  const discovery =
+    spots?.discovery && typeof spots.discovery === 'object'
+      ? (spots.discovery as Record<string, unknown>)
+      : null;
+  if (!discovery || typeof discovery.countrySwitch !== 'boolean') {
+    return null;
+  }
+  return discovery.countrySwitch;
+}
+
+/**
+ * Global Travel-mode toggle (`spots.discovery.countrySwitch`), shared across
+ * every service — must match spots' own reading of the same config leaf.
+ */
+export async function getGlobalTravelModeFlag(): Promise<boolean | null> {
+  if (!env.configServiceBaseUrl) {
+    return null;
+  }
+  const now = Date.now();
+  if (travelModeCache && now - travelModeCache.at < env.featureFlagsRefreshMs) {
+    return travelModeCache.enabled;
+  }
+  try {
+    const res = await axios.get(`${env.configServiceBaseUrl}/config/client`, {
+      timeout: 5000,
+    });
+    const enabled = parseTravelModeFlag(res.data?.data);
+    if (enabled === null) {
+      return travelModeCache?.enabled ?? null;
+    }
+    travelModeCache = { enabled, at: now };
+    return enabled;
+  } catch (e) {
+    logger.warn('Travel mode flag fetch failed; using cache or open mode', e);
+    return travelModeCache?.enabled ?? null;
+  }
+}

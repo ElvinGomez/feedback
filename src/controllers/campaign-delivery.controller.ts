@@ -12,8 +12,13 @@ import { Promotion } from '../models/promotion.model';
 import { PromotionUserState } from '../models/promotion-user-state.model';
 import { selectCampaignContent } from '../services/campaign-selection.service';
 import { getReportsFeatureFlags } from '../services/feature-flags-cache.service';
+import {
+  assertAudienceCountryAccess,
+  resolveAudienceGeoCenter,
+} from '../services/country-access.service';
 import { getPromotionStyleIssues } from '../validation/campaign.validation';
 import { GEO_BUCKET_DECIMALS, bucketLatLng } from '../utils/geo-bucket';
+import { ApiError } from '../utils/error/error.api';
 import { logger } from '../utils/logger';
 
 function isDuplicateKeyError(err: unknown): boolean {
@@ -124,8 +129,11 @@ export async function getCampaignContent(
     placement: string;
     locale?: string;
     stableToken?: string;
+    countryCode?: string;
     latitude?: number;
     longitude?: number;
+    searchLatitude?: number;
+    searchLongitude?: number;
   };
 
   const flags = await getReportsFeatureFlags();
@@ -139,13 +147,36 @@ export async function getCampaignContent(
   }
 
   try {
+    let effectiveLatitude = typeof q.latitude === 'number' ? q.latitude : undefined;
+    let effectiveLongitude = typeof q.longitude === 'number' ? q.longitude : undefined;
+
+    // countryCode is optional (older app builds omit it) — only gate + override
+    // the query center when the client sent the full Travel-mode contract.
+    if (q.countryCode && typeof q.latitude === 'number' && typeof q.longitude === 'number') {
+      const { travelMode } = await assertAudienceCountryAccess({
+        req,
+        countryCode: q.countryCode,
+        latitude: q.latitude,
+        longitude: q.longitude,
+      });
+      const center = resolveAudienceGeoCenter({
+        travelMode,
+        deviceLatitude: q.latitude,
+        deviceLongitude: q.longitude,
+        searchLatitude: q.searchLatitude,
+        searchLongitude: q.searchLongitude,
+      });
+      effectiveLatitude = center.latitude;
+      effectiveLongitude = center.longitude;
+    }
+
     const result = await selectCampaignContent({
       userId,
       placement: q.placement,
       locale: q.locale,
       stableToken: q.stableToken,
-      latitude: typeof q.latitude === 'number' ? q.latitude : undefined,
-      longitude: typeof q.longitude === 'number' ? q.longitude : undefined,
+      latitude: effectiveLatitude,
+      longitude: effectiveLongitude,
       sessionId: headerString(req, 'x-session-id'),
       appVersion: headerString(req, 'x-app-version'),
       platform: headerString(req, 'x-platform'),
@@ -185,6 +216,10 @@ export async function getCampaignContent(
 
     res.status(200).json(result);
   } catch (e) {
+    if (e instanceof ApiError) {
+      res.status(e.status).json({ code: e.code, name: e.name, message: e.message });
+      return;
+    }
     logger.error('getCampaignContent failed', e);
     res.status(500).json({ message: 'Failed to load campaign content', code: 'INTERNAL' });
   }

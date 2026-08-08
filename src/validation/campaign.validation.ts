@@ -15,7 +15,7 @@ import {
   type ModalSize,
 } from '../constants/campaign.constants';
 import {
-  optionalLatLngQuerySchema,
+  optionalAudienceLocationQuerySchema,
   targetAudienceSchema,
 } from './target-audience.validation';
 
@@ -23,7 +23,7 @@ export const campaignContentQuerySchema = z.object({
   placement: z.enum(CAMPAIGN_PLACEMENTS),
   locale: z.string().min(2).max(32).optional(),
   stableToken: z.string().uuid().optional(),
-  ...optionalLatLngQuerySchema,
+  ...optionalAudienceLocationQuerySchema,
 });
 
 export const campaignEventBodySchema = z

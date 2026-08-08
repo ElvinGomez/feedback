@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import type { SurveyQuestion } from '../models/survey.model';
 import {
-  optionalLatLngQuerySchema,
+  optionalAudienceLocationQuerySchema,
   targetAudienceSchema,
 } from './target-audience.validation';
 
@@ -16,7 +16,7 @@ export const activeSurveyQuerySchema = z.object({
   placement: z.string().min(1),
   /** App locale (e.g. `en`, `es_PA`); picks matching copy from `translations`. */
   locale: z.string().min(2).max(32).optional(),
-  ...optionalLatLngQuerySchema,
+  ...optionalAudienceLocationQuerySchema,
 });
 
 const questionSchema = z.object({

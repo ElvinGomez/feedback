@@ -13,6 +13,25 @@ export default {
   ),
   logtoEndpoint: process.env.LOGTO_ENDPOINT?.trim() || '',
   logtoResource: process.env.LOGTO_RESOURCE?.trim() || undefined,
+
+  /** Mapbox token for reverse-geocoding country from lat/lng (Travel mode residency check). */
+  mapboxAccessToken: process.env.MAPBOX_ACCESS_TOKEN?.trim() || '',
+
+  /**
+   * IP→country lookup (fallback when CF-IPCountry is absent).
+   * Default provider: ipinfo.io (`https://ipinfo.io/{ip}/country`).
+   */
+  ipGeoProvider: (process.env.IP_GEO_PROVIDER?.trim() || 'ipinfo') as string,
+  ipGeoApiKey: process.env.IP_GEO_API_KEY?.trim() || '',
+  ipGeoCacheTtlMs: Math.max(
+    60_000,
+    Number(process.env.IP_GEO_CACHE_TTL_MS) || 3_600_000,
+  ),
+  geocodeCacheTtlMs: Math.max(
+    60_000,
+    Number(process.env.GEOCODE_CACHE_TTL_MS) || 3_600_000,
+  ),
+
   internalApiKey:
     process.env.FEEDBACK_INTERNAL_API_KEY?.trim() ||
     process.env.REPORTS_INTERNAL_API_KEY?.trim() ||

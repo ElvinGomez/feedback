@@ -5,7 +5,12 @@ import { Survey } from '../models/survey.model';
 import type { SurveyQuestion } from '../models/survey.model';
 import { SurveyResponse } from '../models/survey-response.model';
 import { matchesTargetAudience } from '../services/audience-matching.service';
+import {
+  assertAudienceCountryAccess,
+  resolveAudienceGeoCenter,
+} from '../services/country-access.service';
 import { translationQuestionsMismatchMessage } from '../validation/survey.validation';
+import { ApiError } from '../utils/error/error.api';
 import { logger } from '../utils/logger';
 
 /** Max length for `open_text` survey answers (must match mobile client). */
@@ -228,17 +233,52 @@ export async function getActiveSurvey(
   const q = req.query as unknown as {
     placement: string;
     locale?: string;
+    countryCode?: string;
     latitude?: number;
     longitude?: number;
+    searchLatitude?: number;
+    searchLongitude?: number;
   };
+
+  let effectiveLatitude = typeof q.latitude === 'number' ? q.latitude : undefined;
+  let effectiveLongitude = typeof q.longitude === 'number' ? q.longitude : undefined;
+
+  // countryCode is optional (older app builds omit it) — only gate + override
+  // the query center when the client sent the full Travel-mode contract.
+  if (q.countryCode && typeof q.latitude === 'number' && typeof q.longitude === 'number') {
+    try {
+      const { travelMode } = await assertAudienceCountryAccess({
+        req,
+        countryCode: q.countryCode,
+        latitude: q.latitude,
+        longitude: q.longitude,
+      });
+      const center = resolveAudienceGeoCenter({
+        travelMode,
+        deviceLatitude: q.latitude,
+        deviceLongitude: q.longitude,
+        searchLatitude: q.searchLatitude,
+        searchLongitude: q.searchLongitude,
+      });
+      effectiveLatitude = center.latitude;
+      effectiveLongitude = center.longitude;
+    } catch (e) {
+      if (e instanceof ApiError) {
+        res.status(e.status).json({ code: e.code, name: e.name, message: e.message });
+        return;
+      }
+      throw e;
+    }
+  }
+
   const now = new Date();
   const audienceCtx = {
     userId,
     locale: q.locale,
     platform: headerString(req, 'x-platform'),
     appVersion: headerString(req, 'x-app-version'),
-    latitude: typeof q.latitude === 'number' ? q.latitude : undefined,
-    longitude: typeof q.longitude === 'number' ? q.longitude : undefined,
+    latitude: effectiveLatitude,
+    longitude: effectiveLongitude,
   };
 
   const filter: Record<string, unknown> = {
