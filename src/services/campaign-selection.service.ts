@@ -14,7 +14,10 @@ import { PromotionUserState } from '../models/promotion-user-state.model';
 import { Survey } from '../models/survey.model';
 import type { SurveyQuestion } from '../models/survey.model';
 import { SurveyResponse } from '../models/survey-response.model';
-import { matchesTargetAudience } from './audience-matching.service';
+import {
+  matchesTargetAudience,
+  type AudienceContext,
+} from './audience-matching.service';
 
 export type WeightedItem = { id: string; weight: number };
 
@@ -294,6 +297,7 @@ export async function selectCampaignContent(opts: {
   sessionId?: string;
   appVersion?: string;
   platform?: string;
+  countryCode?: string;
   latitude?: number;
   longitude?: number;
   stableToken?: string;
@@ -306,9 +310,10 @@ export async function selectCampaignContent(opts: {
     locale: opts.locale,
     platform: opts.platform,
     appVersion: opts.appVersion,
+    countryCode: opts.countryCode,
     latitude: opts.latitude,
     longitude: opts.longitude,
-  };
+  } satisfies AudienceContext;
 
   if (opts.stableToken) {
     const existing = (await CampaignSelection.findOne({
@@ -327,7 +332,10 @@ export async function selectCampaignContent(opts: {
       selectionAudit?: unknown;
     } | null;
     if (existing && existing.placement === opts.placement) {
-      return rebuildResponseFromSelection(existing, opts.locale);
+      const rebuilt = await rebuildResponseFromSelection(existing, opts.locale, audienceCtx);
+      if (rebuilt) {
+        return rebuilt;
+      }
     }
   }
 
@@ -629,6 +637,7 @@ async function rebuildResponseFromSelection(
     selectionAudit?: unknown;
   },
   locale?: string,
+  audienceCtx?: AudienceContext,
 ): Promise<CampaignContentResult> {
   if (selection.contentType === 'survey') {
     const survey = (await Survey.findById(selection.contentId).lean().exec()) as
@@ -636,6 +645,12 @@ async function rebuildResponseFromSelection(
       | null;
     if (!survey || survey.status !== 'published') {
       return null;
+    }
+    if (audienceCtx) {
+      const audienceMatch = matchesTargetAudience(survey.targetAudience, audienceCtx);
+      if (!audienceMatch.matched) {
+        return null;
+      }
     }
     const shown = displaySurvey(survey, locale);
     return {
@@ -658,6 +673,12 @@ async function rebuildResponseFromSelection(
     | null;
   if (!promo || promo.status !== 'active') {
     return null;
+  }
+  if (audienceCtx) {
+    const audienceMatch = matchesTargetAudience(promo.targetAudience, audienceCtx);
+    if (!audienceMatch.matched) {
+      return null;
+    }
   }
   return {
     contentId: selection.contentId,

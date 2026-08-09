@@ -8,10 +8,21 @@ export const targetAudienceGeoSchema = z.object({
   label: z.string().max(120).optional(),
 });
 
+const countryCodeSchema = z
+  .string()
+  .trim()
+  .length(2)
+  .transform((code) => code.toUpperCase())
+  .refine((code) => /^[A-Z]{2}$/.test(code), {
+    message: 'country code must be ISO 3166-1 alpha-2',
+  });
+
 export const targetAudienceSchema = z.object({
   allowAll: z.boolean().default(true),
   locales: z.array(z.string().min(2).max(32)).optional(),
   platforms: z.array(z.enum(['ios', 'android'])).optional(),
+  /** One or more country gates; user matches if their effective country is listed. */
+  countryCodes: z.array(countryCodeSchema).max(250).optional(),
   /** Preferred: one or more radius gates; user matches if inside any. */
   geos: z.array(targetAudienceGeoSchema).max(50).optional(),
   /** @deprecated Prefer `geos`. Still accepted and merged into `geos` when reading. */
@@ -40,7 +51,7 @@ export const optionalLatLngQuerySchema = {
  */
 export const optionalAudienceLocationQuerySchema = {
   ...optionalLatLngQuerySchema,
-  countryCode: z.string().length(2).optional(),
+  countryCode: countryCodeSchema.optional(),
   searchLatitude: z.coerce.number().min(-90).max(90).optional(),
   searchLongitude: z.coerce.number().min(-180).max(180).optional(),
 };

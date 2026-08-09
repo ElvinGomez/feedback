@@ -277,6 +277,7 @@ export async function getActiveSurvey(
     locale: q.locale,
     platform: headerString(req, 'x-platform'),
     appVersion: headerString(req, 'x-app-version'),
+    countryCode: q.countryCode,
     latitude: effectiveLatitude,
     longitude: effectiveLongitude,
   };

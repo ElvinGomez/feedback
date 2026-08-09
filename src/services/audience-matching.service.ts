@@ -8,6 +8,7 @@ export type AudienceContext = {
   locale?: string;
   platform?: string;
   appVersion?: string;
+  countryCode?: string;
   latitude?: number;
   longitude?: number;
 };
@@ -96,6 +97,16 @@ function normalizeAudience(
           (x): x is 'ios' | 'android' => x === 'ios' || x === 'android',
         )
       : undefined,
+    countryCodes: Array.isArray(o.countryCodes)
+      ? Array.from(
+          new Set(
+            o.countryCodes
+              .filter((x): x is string => typeof x === 'string')
+              .map((x) => x.trim().toUpperCase())
+              .filter((x) => /^[A-Z]{2}$/.test(x)),
+          ),
+        )
+      : undefined,
     geos: resolveAudienceGeos(o),
     geosResolved: resolveAudienceGeos(o),
   };
@@ -125,6 +136,16 @@ export function matchesTargetAudience(
   if (audience.platforms?.length) {
     if (!ctx.platform || !audience.platforms.includes(ctx.platform as 'ios' | 'android')) {
       return { matched: false, reason: 'audience_platform_mismatch' };
+    }
+  }
+
+  if (audience.countryCodes?.length) {
+    const countryCode = ctx.countryCode?.trim().toUpperCase();
+    if (!countryCode) {
+      return { matched: false, reason: 'audience_country_missing' };
+    }
+    if (!audience.countryCodes.includes(countryCode)) {
+      return { matched: false, reason: 'audience_country_mismatch' };
     }
   }
 

@@ -175,6 +175,7 @@ export async function getCampaignContent(
       placement: q.placement,
       locale: q.locale,
       stableToken: q.stableToken,
+      countryCode: q.countryCode,
       latitude: effectiveLatitude,
       longitude: effectiveLongitude,
       sessionId: headerString(req, 'x-session-id'),
