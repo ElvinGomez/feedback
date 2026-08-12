@@ -14,6 +14,7 @@ export type ReportsFeatureFlags = {
   analytics: boolean;
   campaignDelivery: boolean;
   promotions: boolean;
+  announcements: boolean;
 };
 
 let cache: { flags: ReportsFeatureFlags; at: number } | null = null;
@@ -55,6 +56,9 @@ function parseReportsPayload(data: unknown): ReportsFeatureFlags | null {
   const promotions = Boolean(
     typeof fb?.promotions === 'boolean' ? fb.promotions : false,
   );
+  const announcements = Boolean(
+    typeof fb?.announcements === 'boolean' ? fb.announcements : false,
+  );
   return {
     create: Boolean(p.create),
     read: Boolean(p.read),
@@ -67,6 +71,7 @@ function parseReportsPayload(data: unknown): ReportsFeatureFlags | null {
     analytics,
     campaignDelivery,
     promotions,
+    announcements,
   };
 }
 

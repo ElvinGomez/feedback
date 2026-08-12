@@ -51,6 +51,23 @@ export function analyticsRouteToFlagKey(
   return null;
 }
 
+/**
+ * Map HTTP method + path relative to `/feedback/announcements` mount.
+ */
+export function announcementRouteToFlagKey(
+  method: string,
+  path: string,
+): ReportRouteFlagKey | null {
+  const m = method.toUpperCase();
+  if (m === 'GET' && path === '/active') {
+    return 'announcements';
+  }
+  if (m === 'POST' && /^\/[^/]+\/events$/.test(path)) {
+    return 'announcements';
+  }
+  return null;
+}
+
 export function flagKeyForRequest(
   method: string,
   path: string,
@@ -58,6 +75,9 @@ export function flagKeyForRequest(
 ): ReportRouteFlagKey | null {
   if (baseUrl.includes('/analytics')) {
     return analyticsRouteToFlagKey(method, path);
+  }
+  if (baseUrl.includes('/announcements')) {
+    return announcementRouteToFlagKey(method, path);
   }
   return reportRouteToFlagKey(method, path);
 }
@@ -74,6 +94,9 @@ export function flagPermissionPath(key: ReportRouteFlagKey): string {
   }
   if (key === 'promotions') {
     return permissionPathForResourceKey('feedback', 'promotions');
+  }
+  if (key === 'announcements') {
+    return permissionPathForResourceKey('feedback', 'announcements');
   }
   return permissionPathForResourceKey('feedback', `reports.${key}`);
 }

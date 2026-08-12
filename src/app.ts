@@ -11,14 +11,18 @@ import './models/campaign-event.model';
 import './models/campaign-placement-config.model';
 import './models/promotion-user-state.model';
 import './models/analytics-event.model';
+import './models/announcement.model';
+import './models/announcement-user-state.model';
 import reportRoutes from './routes/report.routes';
 import surveyRoutes from './routes/survey.routes';
 import campaignDeliveryRoutes from './routes/campaign-delivery.routes';
 import analyticsRoutes from './routes/analytics.routes';
+import announcementRoutes from './routes/announcement.routes';
 import internalReportRoutes from './routes/internal-report.routes';
 import internalSurveyRoutes from './routes/internal-survey.routes';
 import internalCampaignDeliveryRoutes from './routes/internal-campaign-delivery.routes';
 import internalAnalyticsRoutes from './routes/internal-analytics.routes';
+import internalAnnouncementRoutes from './routes/internal-announcement.routes';
 import healthRoutes from './routes/health.routes';
 import errorMiddleware from './middleware/error.middleware';
 import { reportsFeatureFlagsMiddleware } from './middleware/reports-feature-flags.middleware';
@@ -80,6 +84,10 @@ const publicAnalyticsStack = buildPublicFeedbackStack();
 publicAnalyticsStack.use('/', analyticsRoutes);
 app.use('/feedback/analytics', publicAnalyticsStack);
 
+const publicAnnouncementStack = buildPublicFeedbackStack();
+publicAnnouncementStack.use('/', announcementRoutes);
+app.use('/feedback/announcements', publicAnnouncementStack);
+
 const internalReportStack = express.Router();
 internalReportStack.use(requireInternalApiKey);
 internalReportStack.use('/', internalReportRoutes);
@@ -99,6 +107,11 @@ const internalAnalyticsStack = express.Router();
 internalAnalyticsStack.use(requireInternalApiKey);
 internalAnalyticsStack.use('/', internalAnalyticsRoutes);
 app.use('/feedback/internal/analytics', internalAnalyticsStack);
+
+const internalAnnouncementStack = express.Router();
+internalAnnouncementStack.use(requireInternalApiKey);
+internalAnnouncementStack.use('/', internalAnnouncementRoutes);
+app.use('/feedback/internal/announcements', internalAnnouncementStack);
 
 app.use(errorMiddleware);
 
