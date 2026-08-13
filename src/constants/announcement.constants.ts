@@ -11,17 +11,44 @@ export type AnnouncementStatus = (typeof ANNOUNCEMENT_STATUSES)[number];
 export const ANNOUNCEMENT_DISPLAY_STYLES = ['banner', 'modal'] as const;
 export type AnnouncementDisplayStyle = (typeof ANNOUNCEMENT_DISPLAY_STYLES)[number];
 
-export const ANNOUNCEMENT_MEDIA_TYPES = ['text', 'html'] as const;
+/** Modal chrome size — only applies when `displayStyle` is `modal`. */
+export const ANNOUNCEMENT_MODAL_SIZES = ['medium', 'full_screen'] as const;
+export type AnnouncementModalSize = (typeof ANNOUNCEMENT_MODAL_SIZES)[number];
+
+/**
+ * Content kinds for announcements:
+ * - text: title + message (optional icon on banners)
+ * - image / video: remote media via `mediaUrl`
+ * - html: raw HTML rendered in a WebView
+ */
+export const ANNOUNCEMENT_MEDIA_TYPES = ['text', 'image', 'video', 'html'] as const;
 export type AnnouncementMediaType = (typeof ANNOUNCEMENT_MEDIA_TYPES)[number];
 
-/** html content is only allowed on the modal display style. */
+/**
+ * Allowed media by display style (+ modal size for modals):
+ * - banner: text or compact html strip
+ * - modal medium: text, optional image, or html sheet
+ * - modal full_screen: text, image, video, or html (optional background)
+ */
 export const ANNOUNCEMENT_MEDIA_TYPES_BY_DISPLAY_STYLE: Record<
   AnnouncementDisplayStyle,
   readonly AnnouncementMediaType[]
 > = {
-  banner: ['text'],
-  modal: ['text', 'html'],
+  banner: ['text', 'html'],
+  modal: ['text', 'image', 'video', 'html'],
 };
+
+export const ANNOUNCEMENT_MEDIA_TYPES_BY_MODAL_SIZE: Record<
+  AnnouncementModalSize,
+  readonly AnnouncementMediaType[]
+> = {
+  medium: ['text', 'image', 'html'],
+  full_screen: ['text', 'image', 'video', 'html'],
+};
+
+export const ANNOUNCEMENT_BACKGROUND_ALLOWED_MODAL_SIZES: readonly AnnouncementModalSize[] = [
+  'full_screen',
+];
 
 export const ANNOUNCEMENT_FREQUENCY_RULES = [
   'once_ever',

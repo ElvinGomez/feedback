@@ -26,12 +26,15 @@ function serializeAnnouncement(a: {
   internalDescription?: string;
   status: string;
   displayStyle: string;
+  modalSize?: string;
   priority: number;
   defaultLocale?: string;
   translations?: unknown;
   title: string;
   message?: string;
   mediaType?: string;
+  mediaUrl?: string;
+  background?: string;
   htmlContent?: string;
   icon?: string;
   primaryAction?: unknown;
@@ -53,12 +56,15 @@ function serializeAnnouncement(a: {
     internalDescription: a.internalDescription ?? '',
     status: a.status,
     displayStyle: a.displayStyle,
+    modalSize: a.modalSize ?? 'medium',
     priority: a.priority,
     defaultLocale: a.defaultLocale ?? 'en',
     translations: a.translations ?? {},
     title: a.title,
     message: a.message ?? '',
     mediaType: a.mediaType ?? 'text',
+    mediaUrl: a.mediaUrl ?? '',
+    background: a.background ?? '',
     htmlContent: a.htmlContent ?? '',
     icon: a.icon ?? '',
     primaryAction: a.primaryAction ?? null,
@@ -294,7 +300,10 @@ export async function internalPatchAnnouncement(
 
   const existing = (await Announcement.findById(id).lean().exec()) as {
     displayStyle?: string;
+    modalSize?: string;
     mediaType?: string;
+    mediaUrl?: string;
+    background?: string;
     htmlContent?: string;
   } | null;
   if (!existing) {
@@ -303,12 +312,18 @@ export async function internalPatchAnnouncement(
   }
   const merged = { ...existing, ...update } as {
     displayStyle?: string;
+    modalSize?: string;
     mediaType?: string;
+    mediaUrl?: string;
+    background?: string;
     htmlContent?: string;
   };
   const styleIssues = getAnnouncementStyleIssues({
     displayStyle: merged.displayStyle ?? 'banner',
+    modalSize: merged.modalSize ?? 'medium',
     mediaType: merged.mediaType ?? 'text',
+    mediaUrl: merged.mediaUrl ?? '',
+    background: merged.background ?? '',
     htmlContent: merged.htmlContent ?? '',
   });
   if (styleIssues.length) {

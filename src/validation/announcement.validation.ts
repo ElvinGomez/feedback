@@ -1,14 +1,18 @@
 import { z } from 'zod';
 import { ACTION_TYPES } from '../constants/campaign.constants';
 import {
+  ANNOUNCEMENT_BACKGROUND_ALLOWED_MODAL_SIZES,
   ANNOUNCEMENT_DISPLAY_STYLES,
   ANNOUNCEMENT_EVENT_TYPES,
   ANNOUNCEMENT_FREQUENCY_RULES,
   ANNOUNCEMENT_MEDIA_TYPES,
   ANNOUNCEMENT_MEDIA_TYPES_BY_DISPLAY_STYLE,
+  ANNOUNCEMENT_MEDIA_TYPES_BY_MODAL_SIZE,
+  ANNOUNCEMENT_MODAL_SIZES,
   ANNOUNCEMENT_STATUSES,
   type AnnouncementDisplayStyle,
   type AnnouncementMediaType,
+  type AnnouncementModalSize,
 } from '../constants/announcement.constants';
 import {
   optionalAudienceLocationQuerySchema,
@@ -37,7 +41,10 @@ const actionSchema = z.object({
 
 export type AnnouncementStyleInput = {
   displayStyle: string;
+  modalSize: string;
   mediaType: string;
+  mediaUrl: string;
+  background: string;
   htmlContent: string;
 };
 
@@ -46,28 +53,45 @@ export type AnnouncementStyleIssue = {
   message: string;
 };
 
+function normalizeDisplayStyle(raw: string): AnnouncementDisplayStyle {
+  return (ANNOUNCEMENT_DISPLAY_STYLES as readonly string[]).includes(raw)
+    ? (raw as AnnouncementDisplayStyle)
+    : 'banner';
+}
+
+function normalizeModalSize(raw: string): AnnouncementModalSize {
+  return (ANNOUNCEMENT_MODAL_SIZES as readonly string[]).includes(raw)
+    ? (raw as AnnouncementModalSize)
+    : 'medium';
+}
+
 /**
- * Per-display-style style rules shared by create validation and patch enforcement:
- * - banner: text only, no html
- * - modal: text or html
+ * Style rules shared by create validation and patch enforcement:
+ * - banner: text or html strip (no mediaUrl / background / video)
+ * - modal medium: text, image, or html
+ * - modal full_screen: text, image, video, or html (+ optional background)
  */
 export function getAnnouncementStyleIssues(
   input: AnnouncementStyleInput,
 ): AnnouncementStyleIssue[] {
   const issues: AnnouncementStyleIssue[] = [];
-  const displayStyle = (
-    ANNOUNCEMENT_DISPLAY_STYLES as readonly string[]
-  ).includes(input.displayStyle)
-    ? (input.displayStyle as AnnouncementDisplayStyle)
-    : 'banner';
-  const allowedMedia = ANNOUNCEMENT_MEDIA_TYPES_BY_DISPLAY_STYLE[displayStyle];
+  const displayStyle = normalizeDisplayStyle(input.displayStyle);
+  const modalSize = normalizeModalSize(input.modalSize);
+  const allowedMedia =
+    displayStyle === 'banner'
+      ? ANNOUNCEMENT_MEDIA_TYPES_BY_DISPLAY_STYLE.banner
+      : ANNOUNCEMENT_MEDIA_TYPES_BY_MODAL_SIZE[modalSize];
 
   if (!allowedMedia.includes(input.mediaType as AnnouncementMediaType)) {
     issues.push({
       path: ['mediaType'],
-      message: `mediaType "${input.mediaType}" is not allowed for displayStyle "${displayStyle}" (allowed: ${allowedMedia.join(', ')})`,
+      message:
+        displayStyle === 'banner'
+          ? `mediaType "${input.mediaType}" is not allowed for displayStyle "banner" (allowed: ${allowedMedia.join(', ')})`
+          : `mediaType "${input.mediaType}" is not allowed for modalSize "${modalSize}" (allowed: ${allowedMedia.join(', ')})`,
     });
   }
+
   if (input.mediaType === 'html') {
     if (!input.htmlContent.trim()) {
       issues.push({
@@ -81,7 +105,63 @@ export function getAnnouncementStyleIssues(
       message: 'htmlContent is only allowed when mediaType is html',
     });
   }
+
+  if (input.mediaType === 'image' || input.mediaType === 'video') {
+    if (!input.mediaUrl.trim()) {
+      issues.push({
+        path: ['mediaUrl'],
+        message: 'mediaUrl is required when mediaType is image or video',
+      });
+    }
+  } else if (input.mediaUrl.trim()) {
+    issues.push({
+      path: ['mediaUrl'],
+      message: 'mediaUrl is only allowed when mediaType is image or video',
+    });
+  }
+
+  const backgroundAllowed =
+    displayStyle === 'modal' &&
+    (ANNOUNCEMENT_BACKGROUND_ALLOWED_MODAL_SIZES as readonly string[]).includes(modalSize);
+  if (input.background.trim() && !backgroundAllowed) {
+    issues.push({
+      path: ['background'],
+      message: 'background is only allowed for modal displayStyle with modalSize "full_screen"',
+    });
+  }
+
   return issues;
+}
+
+/** Strip disallowed style fields before persistence / delivery. */
+export function sanitizeAnnouncementStyle(input: AnnouncementStyleInput): {
+  modalSize: AnnouncementModalSize;
+  mediaType: AnnouncementMediaType;
+  mediaUrl: string;
+  background: string;
+  htmlContent: string;
+} {
+  const displayStyle = normalizeDisplayStyle(input.displayStyle);
+  const modalSize =
+    displayStyle === 'modal' ? normalizeModalSize(input.modalSize) : 'medium';
+  const allowed =
+    displayStyle === 'banner'
+      ? ANNOUNCEMENT_MEDIA_TYPES_BY_DISPLAY_STYLE.banner
+      : ANNOUNCEMENT_MEDIA_TYPES_BY_MODAL_SIZE[modalSize];
+  const mediaType = allowed.includes(input.mediaType as AnnouncementMediaType)
+    ? (input.mediaType as AnnouncementMediaType)
+    : 'text';
+  const backgroundAllowed =
+    displayStyle === 'modal' &&
+    (ANNOUNCEMENT_BACKGROUND_ALLOWED_MODAL_SIZES as readonly string[]).includes(modalSize);
+  return {
+    modalSize,
+    mediaType,
+    mediaUrl:
+      mediaType === 'image' || mediaType === 'video' ? input.mediaUrl.trim() : '',
+    background: backgroundAllowed ? input.background.trim() : '',
+    htmlContent: mediaType === 'html' ? input.htmlContent : '',
+  };
 }
 
 const announcementTranslationBundleSchema = z.object({
@@ -91,12 +171,57 @@ const announcementTranslationBundleSchema = z.object({
   secondaryAction: z.object({ label: z.string() }).optional(),
 });
 
+function refineAnnouncementStyle(
+  val: {
+    displayStyle: string;
+    modalSize: string;
+    mediaType: string;
+    mediaUrl: string;
+    background: string;
+    htmlContent: string;
+    schedule?: { startAt?: Date | null; endAt?: Date | null };
+  },
+  ctx: z.RefinementCtx,
+) {
+  const styleIssues = getAnnouncementStyleIssues({
+    displayStyle: val.displayStyle,
+    modalSize: val.modalSize,
+    mediaType: val.mediaType,
+    mediaUrl: val.mediaUrl,
+    background: val.background,
+    htmlContent: val.htmlContent,
+  });
+  for (const issue of styleIssues) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: issue.message,
+      path: issue.path,
+    });
+  }
+  if (
+    val.schedule?.startAt &&
+    val.schedule?.endAt &&
+    val.schedule.endAt <= val.schedule.startAt
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'schedule.endAt must be after startAt',
+      path: ['schedule', 'endAt'],
+    });
+  }
+}
+
 export const internalCreateAnnouncementBodySchema = z
   .object({
     internalName: z.string().min(3).max(120),
     internalDescription: z.string().max(2000).optional().default(''),
     status: z.enum(ANNOUNCEMENT_STATUSES).default('draft'),
     displayStyle: z.enum(ANNOUNCEMENT_DISPLAY_STYLES).default('banner'),
+    modalSize: z.enum(ANNOUNCEMENT_MODAL_SIZES).default('medium'),
+    mediaType: z.enum(ANNOUNCEMENT_MEDIA_TYPES).default('text'),
+    mediaUrl: z.string().max(2000).default(''),
+    background: z.string().max(64).default(''),
+    htmlContent: z.string().max(100000).default(''),
     priority: z.number().int().min(0).max(10000).default(0),
     defaultLocale: z.string().min(2).max(32).default('en'),
     translations: z
@@ -104,8 +229,6 @@ export const internalCreateAnnouncementBodySchema = z
       .optional(),
     title: z.string().min(1).max(200),
     message: z.string().max(4000).default(''),
-    mediaType: z.enum(ANNOUNCEMENT_MEDIA_TYPES).default('text'),
-    htmlContent: z.string().max(100000).default(''),
     icon: z.string().max(64).optional().default(''),
     primaryAction: actionSchema.optional().nullable(),
     secondaryAction: actionSchema.optional().nullable(),
@@ -123,37 +246,18 @@ export const internalCreateAnnouncementBodySchema = z
     maxAppVersion: z.string().max(32).optional(),
     targetAudience: targetAudienceSchema.optional(),
   })
-  .superRefine((val, ctx) => {
-    const styleIssues = getAnnouncementStyleIssues({
-      displayStyle: val.displayStyle,
-      mediaType: val.mediaType,
-      htmlContent: val.htmlContent,
-    });
-    for (const issue of styleIssues) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: issue.message,
-        path: issue.path,
-      });
-    }
-    if (
-      val.schedule?.startAt &&
-      val.schedule?.endAt &&
-      val.schedule.endAt <= val.schedule.startAt
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'schedule.endAt must be after startAt',
-        path: ['schedule', 'endAt'],
-      });
-    }
-  });
+  .superRefine(refineAnnouncementStyle);
 
 const announcementFieldsSchema = z.object({
   internalName: z.string().min(3).max(120),
   internalDescription: z.string().max(2000).optional(),
   status: z.enum(ANNOUNCEMENT_STATUSES),
   displayStyle: z.enum(ANNOUNCEMENT_DISPLAY_STYLES),
+  modalSize: z.enum(ANNOUNCEMENT_MODAL_SIZES),
+  mediaType: z.enum(ANNOUNCEMENT_MEDIA_TYPES),
+  mediaUrl: z.string().max(2000),
+  background: z.string().max(64),
+  htmlContent: z.string().max(100000),
   priority: z.number().int().min(0).max(10000),
   defaultLocale: z.string().min(2).max(32),
   translations: z
@@ -161,8 +265,6 @@ const announcementFieldsSchema = z.object({
     .optional(),
   title: z.string().min(1).max(200),
   message: z.string().max(4000),
-  mediaType: z.enum(ANNOUNCEMENT_MEDIA_TYPES),
-  htmlContent: z.string().max(100000),
   icon: z.string().max(64).optional(),
   primaryAction: actionSchema.optional().nullable(),
   secondaryAction: actionSchema.optional().nullable(),

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import type { AnnouncementFrequencyRule } from '../constants/announcement.constants';
 import { Announcement } from '../models/announcement.model';
 import { AnnouncementUserState } from '../models/announcement-user-state.model';
+import { sanitizeAnnouncementStyle } from '../validation/announcement.validation';
 import {
   matchesTargetAudience,
   type AudienceContext,
@@ -10,6 +11,7 @@ import {
 type AnnouncementCandidate = {
   _id: mongoose.Types.ObjectId;
   displayStyle: string;
+  modalSize?: string;
   priority: number;
   defaultLocale?: string;
   translations?: Record<
@@ -24,6 +26,8 @@ type AnnouncementCandidate = {
   title: string;
   message?: string;
   mediaType?: string;
+  mediaUrl?: string;
+  background?: string;
   htmlContent?: string;
   icon?: string;
   primaryAction?: { label: string; type: string; value?: string } | null;
@@ -40,9 +44,12 @@ type AnnouncementCandidate = {
 export type AnnouncementPayload = {
   id: string;
   displayStyle: string;
+  modalSize: string;
   title: string;
   message: string;
   mediaType: string;
+  mediaUrl: string;
+  background: string;
   htmlContent: string;
   icon: string;
   primaryAction: { label: string; type: string; value: string } | null;
@@ -90,13 +97,24 @@ function displayAnnouncement(
   const def = a.defaultLocale ?? 'en';
   const bundle =
     locale && locale !== def ? pickTranslationBundle(a.translations, locale) : null;
+  const style = sanitizeAnnouncementStyle({
+    displayStyle: a.displayStyle,
+    modalSize: a.modalSize ?? 'medium',
+    mediaType: a.mediaType ?? 'text',
+    mediaUrl: a.mediaUrl ?? '',
+    background: a.background ?? '',
+    htmlContent: a.htmlContent ?? '',
+  });
   return {
     id: a._id.toString(),
     displayStyle: a.displayStyle,
+    modalSize: a.displayStyle === 'modal' ? style.modalSize : 'medium',
     title: bundle?.title || a.title,
-    message: bundle?.message ?? a.message ?? '',
-    mediaType: a.mediaType ?? 'text',
-    htmlContent: a.mediaType === 'html' ? a.htmlContent ?? '' : '',
+    message: style.mediaType === 'html' ? '' : bundle?.message ?? a.message ?? '',
+    mediaType: style.mediaType,
+    mediaUrl: style.mediaUrl,
+    background: style.background,
+    htmlContent: style.htmlContent,
     icon: a.icon ?? '',
     primaryAction: a.primaryAction
       ? {

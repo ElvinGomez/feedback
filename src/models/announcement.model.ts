@@ -4,6 +4,7 @@ import {
   ANNOUNCEMENT_DISPLAY_STYLES,
   ANNOUNCEMENT_FREQUENCY_RULES,
   ANNOUNCEMENT_MEDIA_TYPES,
+  ANNOUNCEMENT_MODAL_SIZES,
   ANNOUNCEMENT_STATUSES,
 } from '../constants/announcement.constants';
 
@@ -30,13 +31,23 @@ const announcementSchema = new mongoose.Schema(
       enum: ANNOUNCEMENT_DISPLAY_STYLES,
       default: 'banner',
     },
+    /** Only used when displayStyle is `modal`. Defaults to medium (bottom sheet). */
+    modalSize: {
+      type: String,
+      enum: ANNOUNCEMENT_MODAL_SIZES,
+      default: 'medium',
+    },
     priority: { type: Number, default: 0 },
     defaultLocale: { type: String, required: true, default: 'en' },
     translations: { type: mongoose.Schema.Types.Mixed, default: undefined },
     title: { type: String, required: true },
     message: { type: String, default: '' },
     mediaType: { type: String, enum: ANNOUNCEMENT_MEDIA_TYPES, default: 'text' },
-    /** Raw HTML rendered in a WebView; only used when mediaType is `html` (modal only). */
+    /** Remote image/video URL when mediaType is `image` or `video`. */
+    mediaUrl: { type: String, default: '' },
+    /** Full-screen modal background color (hex/CSS). Only for modal + full_screen. */
+    background: { type: String, default: '' },
+    /** Raw HTML rendered in a WebView; used when mediaType is `html`. */
     htmlContent: { type: String, default: '' },
     icon: { type: String, default: '' },
     primaryAction: { type: actionSchema, default: undefined },
