@@ -21,8 +21,6 @@ export async function initLogtoAuthFromConfig(): Promise<void> {
   auth = createLogtoAuth({
     logto: logtoAuthEnv,
     allFeatureFlagPaths: data.featureFlagPaths,
-    roles: data.tripsiRoles,
-    roleFeaturePaths: data.roleFeaturePaths,
   });
 }
 

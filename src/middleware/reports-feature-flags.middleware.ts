@@ -4,6 +4,7 @@ import {
   getReportsFeatureFlags,
   type ReportsFeatureFlags,
 } from '../services/feature-flags-cache.service';
+import { isTargetingAllowedForRequest } from '../utils/feature-flag-targeting';
 
 export type ReportRouteFlagKey = keyof ReportsFeatureFlags;
 
@@ -116,11 +117,20 @@ export const reportsFeatureFlagsMiddleware: RequestHandler = async (
     next();
     return;
   }
+  const flag = flagPermissionPath(key);
   if (!flags[key]) {
     res.status(503).json({
       message: 'This reports capability is temporarily disabled',
       code: 'REPORTS_FEATURE_DISABLED',
-      flag: flagPermissionPath(key),
+      flag,
+    });
+    return;
+  }
+  if (!isTargetingAllowedForRequest(flags.targetingByPath, flag, req)) {
+    res.status(503).json({
+      message: 'This reports capability is temporarily disabled',
+      code: 'REPORTS_FEATURE_DISABLED',
+      flag,
     });
     return;
   }

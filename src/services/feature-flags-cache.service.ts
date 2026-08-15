@@ -1,6 +1,10 @@
 import axios from 'axios';
 import env from '../config/env';
 import { logger } from '../utils/logger';
+import {
+  parseTargetingByPath,
+  type FeatureFlagTargeting,
+} from '../utils/feature-flag-targeting';
 
 export type ReportsFeatureFlags = {
   create: boolean;
@@ -17,9 +21,13 @@ export type ReportsFeatureFlags = {
   announcements: boolean;
 };
 
-let cache: { flags: ReportsFeatureFlags; at: number } | null = null;
+export type ReportsFeatureFlagsBundle = ReportsFeatureFlags & {
+  targetingByPath: Record<string, FeatureFlagTargeting>;
+};
 
-function parseReportsPayload(data: unknown): ReportsFeatureFlags | null {
+let cache: { flags: ReportsFeatureFlagsBundle; at: number } | null = null;
+
+function parseReportsPayload(data: unknown): ReportsFeatureFlagsBundle | null {
   const features = (data as { features?: Record<string, unknown> })?.features;
   if (!features || typeof features !== 'object') {
     return null;
@@ -72,10 +80,13 @@ function parseReportsPayload(data: unknown): ReportsFeatureFlags | null {
     campaignDelivery,
     promotions,
     announcements,
+    targetingByPath: parseTargetingByPath(
+      (data as { targetingByPath?: unknown }).targetingByPath,
+    ),
   };
 }
 
-export async function getReportsFeatureFlags(): Promise<ReportsFeatureFlags | null> {
+export async function getReportsFeatureFlags(): Promise<ReportsFeatureFlagsBundle | null> {
   if (!env.configServiceBaseUrl) {
     return null;
   }
@@ -99,18 +110,30 @@ export async function getReportsFeatureFlags(): Promise<ReportsFeatureFlags | nu
   }
 }
 
-let travelModeCache: { enabled: boolean; at: number } | null = null;
+let travelModeCache: {
+  enabled: boolean;
+  targetingByPath: Record<string, FeatureFlagTargeting>;
+  at: number;
+} | null = null;
 
-function parseTravelModeFlag(data: unknown): boolean | null {
+function parseTravelModeState(data: unknown): {
+  enabled: boolean;
+  targetingByPath: Record<string, FeatureFlagTargeting>;
+} | null {
   const features = (data as { features?: Record<string, unknown> })?.features;
   const travel =
     features?.travel && typeof features.travel === 'object'
       ? (features.travel as Record<string, unknown>)
       : null;
-  if (travel && typeof travel.mode === 'boolean') {
-    return travel.mode;
+  if (!travel || typeof travel.mode !== 'boolean') {
+    return null;
   }
-  return null;
+  return {
+    enabled: travel.mode,
+    targetingByPath: parseTargetingByPath(
+      (data as { targetingByPath?: unknown }).targetingByPath,
+    ),
+  };
 }
 
 /**
@@ -118,25 +141,46 @@ function parseTravelModeFlag(data: unknown): boolean | null {
  * every service — must match spots' own reading of the same config leaf.
  */
 export async function getGlobalTravelModeFlag(): Promise<boolean | null> {
+  const state = await getGlobalTravelModeState();
+  return state?.enabled ?? null;
+}
+
+export async function getGlobalTravelModeState(): Promise<{
+  enabled: boolean;
+  targetingByPath: Record<string, FeatureFlagTargeting>;
+} | null> {
   if (!env.configServiceBaseUrl) {
     return null;
   }
   const now = Date.now();
   if (travelModeCache && now - travelModeCache.at < env.featureFlagsRefreshMs) {
-    return travelModeCache.enabled;
+    return {
+      enabled: travelModeCache.enabled,
+      targetingByPath: travelModeCache.targetingByPath,
+    };
   }
   try {
     const res = await axios.get(`${env.configServiceBaseUrl}/config/client`, {
       timeout: 5000,
     });
-    const enabled = parseTravelModeFlag(res.data?.data);
-    if (enabled === null) {
-      return travelModeCache?.enabled ?? null;
+    const parsed = parseTravelModeState(res.data?.data);
+    if (!parsed) {
+      return travelModeCache
+        ? {
+            enabled: travelModeCache.enabled,
+            targetingByPath: travelModeCache.targetingByPath,
+          }
+        : null;
     }
-    travelModeCache = { enabled, at: now };
-    return enabled;
+    travelModeCache = { ...parsed, at: now };
+    return parsed;
   } catch (e) {
     logger.warn('Travel mode flag fetch failed; using cache or open mode', e);
-    return travelModeCache?.enabled ?? null;
+    return travelModeCache
+      ? {
+          enabled: travelModeCache.enabled,
+          targetingByPath: travelModeCache.targetingByPath,
+        }
+      : null;
   }
 }

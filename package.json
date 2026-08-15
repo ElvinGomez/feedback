@@ -11,7 +11,7 @@
     "lint": "eslint . --ext .ts"
   },
   "dependencies": {
-    "@tripsi-app/logto-server-auth": "^1.0.1",
+    "@tripsi-app/logto-server-auth": "^2.0.0",
     "axios": "^1.8.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",

@@ -3,8 +3,6 @@ import env from '../config/env';
 
 export type PublicClientConfigForAuth = {
   featureFlagPaths: string[];
-  tripsiRoles: string[];
-  roleFeaturePaths: Record<string, string[]>;
 };
 
 let cache: { data: PublicClientConfigForAuth; at: number } | null = null;
@@ -16,19 +14,11 @@ function parseAuthPayload(resData: unknown): PublicClientConfigForAuth | null {
     return null;
   }
   const d = raw as Record<string, unknown>;
-  if (
-    !Array.isArray(d.featureFlagPaths) ||
-    !Array.isArray(d.tripsiRoles) ||
-    !d.roleFeaturePaths ||
-    typeof d.roleFeaturePaths !== 'object' ||
-    Array.isArray(d.roleFeaturePaths)
-  ) {
+  if (!Array.isArray(d.featureFlagPaths)) {
     return null;
   }
   return {
     featureFlagPaths: d.featureFlagPaths as string[],
-    tripsiRoles: d.tripsiRoles as string[],
-    roleFeaturePaths: d.roleFeaturePaths as Record<string, string[]>,
   };
 }
 
@@ -46,9 +36,7 @@ export async function fetchPublicClientConfigForAuth(): Promise<PublicClientConf
   const res = await axios.get(`${base}/config/client`, { timeout: 8000 });
   const parsed = parseAuthPayload(res.data);
   if (!parsed) {
-    throw new Error(
-      'Invalid public client config: missing featureFlagPaths/tripsiRoles/roleFeaturePaths',
-    );
+    throw new Error('Invalid public client config: missing featureFlagPaths');
   }
   cache = { data: parsed, at: now };
   return parsed;

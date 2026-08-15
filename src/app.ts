@@ -13,6 +13,10 @@ import './models/promotion-user-state.model';
 import './models/analytics-event.model';
 import './models/announcement.model';
 import './models/announcement-user-state.model';
+import './models/push-device.model';
+import './models/notification.model';
+import './models/notification-delivery.model';
+import './models/notification-preference.model';
 import reportRoutes from './routes/report.routes';
 import surveyRoutes from './routes/survey.routes';
 import campaignDeliveryRoutes from './routes/campaign-delivery.routes';
@@ -60,8 +64,8 @@ app.use(requireDependencies);
 
 function buildPublicFeedbackStack(): express.Router {
   const stack = express.Router();
-  stack.use(reportsFeatureFlagsMiddleware);
   stack.use(requireLogto);
+  stack.use(reportsFeatureFlagsMiddleware);
   stack.use(attachLogtoUserToLegacyRequest);
   stack.use(requireNotSuspended);
   stack.use(requireReportPermission);
