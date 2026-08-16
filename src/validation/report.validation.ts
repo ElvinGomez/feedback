@@ -12,6 +12,7 @@ export const reportTargetTypeSchema = z.enum([
   'post',
   'user',
   'review',
+  'spot_visit',
 ]);
 
 const reportLatLngSchema = z.object({

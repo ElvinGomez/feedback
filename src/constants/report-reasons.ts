@@ -69,6 +69,14 @@ export const REPORT_REASONS_BY_TARGET: Record<
     'contains_pii',
     'other',
   ],
+  spot_visit: [
+    'harassment',
+    'spam',
+    'personal_attack',
+    'contains_pii',
+    'hate_speech',
+    'other',
+  ],
 };
 
 export function isValidReasonForTarget(
