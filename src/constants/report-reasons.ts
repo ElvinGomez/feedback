@@ -77,6 +77,25 @@ export const REPORT_REASONS_BY_TARGET: Record<
     'hate_speech',
     'other',
   ],
+  spot_visit_image: [
+    'nudity_sexual',
+    'violence_graphic',
+    'harassment_hate',
+    'illegal_content',
+    'spam_scam',
+    'intellectual_property',
+    'misleading_edited',
+    'privacy',
+    'other',
+  ],
+  spot_visit_comment: [
+    'harassment',
+    'spam',
+    'personal_attack',
+    'contains_pii',
+    'hate_speech',
+    'other',
+  ],
 };
 
 export function isValidReasonForTarget(
