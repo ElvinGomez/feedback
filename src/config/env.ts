@@ -43,4 +43,9 @@ export default {
     1000,
     Number(process.env.USER_SUSPENSION_CACHE_MS) || 30_000,
   ),
+
+  /** Spots internal API (visit/note owner checks for self-report). Skip if unset. */
+  spotsServiceBaseUrl:
+    process.env.SPOTS_SERVICE_BASE_URL?.trim().replace(/\/+$/, '') || '',
+  spotsInternalApiKey: process.env.SPOTS_INTERNAL_API_KEY?.trim() || '',
 };
