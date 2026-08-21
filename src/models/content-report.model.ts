@@ -6,7 +6,10 @@ export type ReportTargetType =
   | 'story'
   | 'post'
   | 'user'
-  | 'review';
+  | 'review'
+  | 'spot_visit'
+  | 'spot_visit_image'
+  | 'spot_visit_comment';
 export type ReportStatus = 'pending' | 'reviewed' | 'dismissed';
 
 export interface IReportLatLng {
@@ -54,7 +57,17 @@ const contentReportSchema = new Schema<IContentReport>(
     targetType: {
       type: String,
       required: true,
-      enum: ['spot', 'spot_image', 'story', 'post', 'user', 'review'],
+      enum: [
+        'spot',
+        'spot_image',
+        'story',
+        'post',
+        'user',
+        'review',
+        'spot_visit',
+        'spot_visit_image',
+        'spot_visit_comment',
+      ],
       index: true,
     },
     targetId: { type: String, required: true, index: true },
