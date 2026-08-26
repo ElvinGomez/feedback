@@ -34,3 +34,5 @@ coverage/
 
 # graphify knowledge-graph outputs
 graphify-out/
+.vercel
+.env*

@@ -67,6 +67,12 @@ const announcementSchema = new mongoose.Schema(
     minAppVersion: { type: String, default: '' },
     maxAppVersion: { type: String, default: '' },
     targetAudience: { type: mongoose.Schema.Types.Mixed, default: { allowAll: true } },
+    /** Companion push notification: skip, create a draft campaign, or both. */
+    notifyChannel: {
+      type: String,
+      enum: ['in_app', 'push', 'both'],
+      default: 'in_app',
+    },
     stats: {
       seenTotal: { type: Number, default: 0 },
       uniqueUsersSeen: { type: Number, default: 0 },

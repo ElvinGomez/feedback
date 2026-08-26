@@ -20,6 +20,7 @@ import { getPromotionStyleIssues } from '../validation/campaign.validation';
 import { GEO_BUCKET_DECIMALS, bucketLatLng } from '../utils/geo-bucket';
 import { ApiError } from '../utils/error/error.api';
 import { logger } from '../utils/logger';
+import { createDraftNotificationCampaign } from '../services/notifications-campaign.service';
 
 function isDuplicateKeyError(err: unknown): boolean {
   return (
@@ -449,6 +450,19 @@ export async function internalCreatePromotion(
 ): Promise<void> {
   const body = req.body as Record<string, unknown>;
   const doc = await Promotion.create(body);
+
+  if (body.notifyChannel === 'push' || body.notifyChannel === 'both') {
+    void createDraftNotificationCampaign({
+      title: String(body.title ?? ''),
+      body: String(body.message ?? ''),
+      category: 'PROMOTION',
+      imageUrl: body.mediaType === 'image' ? String(body.mediaUrl ?? '') || null : null,
+      audience: body.targetAudience,
+    }).catch((err) =>
+      logger.warn('Failed to create notification campaign draft for promotion', err),
+    );
+  }
+
   const s = doc.toObject();
   res.status(201).json(serializePromotion(s as Parameters<typeof serializePromotion>[0]));
 }
