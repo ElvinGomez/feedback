@@ -245,6 +245,8 @@ export const internalCreateAnnouncementBodySchema = z
     minAppVersion: z.string().max(32).optional(),
     maxAppVersion: z.string().max(32).optional(),
     targetAudience: targetAudienceSchema.optional(),
+    /** Companion push notification: skip, create a draft campaign, or both. */
+    notifyChannel: z.enum(['in_app', 'push', 'both']).default('in_app'),
   })
   .superRefine(refineAnnouncementStyle);
 
