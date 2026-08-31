@@ -1,7 +1,8 @@
 /**
  * Notification platform skeleton (Phase 0).
  * Device registration, delivery, templates, and APNs/FCM land in Phase 2.
- * Consumers of `notification.requested` should live here — never in AnalyticsEvent.
+ * Consumers of `notification.requested` should live here — never bolted onto an
+ * unrelated write path.
  */
 export {
   NOTIFICATION_CATEGORIES,
