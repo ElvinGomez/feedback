@@ -6,6 +6,7 @@ import {
   type IReportLocationCorrection,
 } from '../models/content-report.model';
 import { logger } from '../utils/logger';
+import { isSelfReport } from '../services/spots-content-owner.service';
 
 function isDuplicateKeyError(err: unknown): boolean {
   return (
@@ -55,6 +56,14 @@ export async function createReport(
   const commentTrimmed = (comment ?? '').trim();
 
   try {
+    if (await isSelfReport(userId, targetType, targetId)) {
+      res.status(403).json({
+        message: 'You cannot report your own content',
+        code: 'REPORT_SELF',
+      });
+      return;
+    }
+
     const doc = await ContentReport.create({
       targetType,
       targetId,
@@ -110,7 +119,17 @@ export async function getEligibility(
     .lean()
     .exec();
 
-  res.status(200).json({ canSubmit: !existing });
+  if (existing) {
+    res.status(200).json({ canSubmit: false });
+    return;
+  }
+
+  if (await isSelfReport(userId, targetType, targetId)) {
+    res.status(200).json({ canSubmit: false });
+    return;
+  }
+
+  res.status(200).json({ canSubmit: true });
 }
 
 export async function internalListReports(
