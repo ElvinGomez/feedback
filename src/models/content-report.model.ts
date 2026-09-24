@@ -9,7 +9,13 @@ export type ReportTargetType =
   | 'review'
   | 'spot_visit'
   | 'spot_visit_image'
-  | 'spot_visit_comment';
+  | 'spot_visit_comment'
+  | 'restaurant'
+  | 'restaurant_image'
+  /** One photo of a restaurant review: `reviewId:img:N`. Owner gallery photos use `restaurant_image`. */
+  | 'restaurant_review_image'
+  | 'restaurant_visit'
+  | 'restaurant_visit_image';
 export type ReportStatus = 'pending' | 'reviewed' | 'dismissed';
 
 export interface IReportLatLng {
@@ -17,7 +23,7 @@ export interface IReportLatLng {
   longitude: number;
 }
 
-/** Spot pin correction for `wrong_location` reports. */
+/** Pin correction for `wrong_location` reports on spots and restaurants. */
 export interface IReportLocationCorrection {
   current: IReportLatLng;
   suggested: IReportLatLng;
@@ -67,6 +73,11 @@ const contentReportSchema = new Schema<IContentReport>(
         'spot_visit',
         'spot_visit_image',
         'spot_visit_comment',
+        'restaurant',
+        'restaurant_image',
+        'restaurant_review_image',
+        'restaurant_visit',
+        'restaurant_visit_image',
       ],
       index: true,
     },
