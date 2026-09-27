@@ -61,12 +61,18 @@ const promotionSchema = new mongoose.Schema(
     minAppVersion: { type: String, default: '' },
     maxAppVersion: { type: String, default: '' },
     targetAudience: { type: mongoose.Schema.Types.Mixed, default: { allowAll: true } },
-    /** Companion push notification: skip, create a draft campaign, or both. */
+    /** Companion push notification: in-app only, push only, or both. Push is sent automatically once active. */
     notifyChannel: {
       type: String,
       enum: ['in_app', 'push', 'both'],
       default: 'in_app',
     },
+    /** notifications-service campaign created for this promotion's push (once per promotion). */
+    pushCampaignId: { type: String, default: null },
+    /** Set when the push was handed to notifications; null means not sent yet (or retryable). */
+    pushDispatchedAt: { type: Date, default: null },
+    /** Last dispatch failure, surfaced in the admin. */
+    pushError: { type: String, default: null },
     stats: {
       impressions: { type: Number, default: 0 },
       uniqueUsers: { type: Number, default: 0 },
