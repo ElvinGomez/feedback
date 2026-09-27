@@ -75,6 +75,8 @@ export const internalCreateSurveyBodySchema = z.object({
     })
     .optional(),
   targetAudience: targetAudienceSchema.optional(),
+  /** Companion push notification: skip, create a draft campaign, or both. */
+  notifyChannel: z.enum(['in_app', 'push', 'both']).default('in_app'),
 });
 
 export const internalPatchSurveyBodySchema = z.object({
