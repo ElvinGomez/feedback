@@ -10,7 +10,10 @@ import {
 import { CampaignSelection } from '../models/campaign-selection.model';
 import { Promotion } from '../models/promotion.model';
 import { PromotionUserState } from '../models/promotion-user-state.model';
-import { selectCampaignContent } from '../services/campaign-selection.service';
+import {
+  selectCampaignContent,
+  selectPromotionById,
+} from '../services/campaign-selection.service';
 import { getReportsFeatureFlags } from '../services/feature-flags-cache.service';
 import {
   assertAudienceCountryAccess,
@@ -20,7 +23,7 @@ import { getPromotionStyleIssues } from '../validation/campaign.validation';
 import { GEO_BUCKET_DECIMALS, bucketLatLng } from '../utils/geo-bucket';
 import { ApiError } from '../utils/error/error.api';
 import { logger } from '../utils/logger';
-import { createDraftNotificationCampaign } from '../services/notifications-campaign.service';
+import { dispatchPromotionPush } from '../services/notifications-campaign.service';
 
 function isDuplicateKeyError(err: unknown): boolean {
   return (
@@ -69,6 +72,10 @@ function serializePromotion(p: {
   minAppVersion?: string;
   maxAppVersion?: string;
   targetAudience?: unknown;
+  notifyChannel?: string;
+  pushCampaignId?: string | null;
+  pushDispatchedAt?: Date | null;
+  pushError?: string | null;
   stats?: unknown;
   createdAt: Date;
   updatedAt: Date;
@@ -110,6 +117,12 @@ function serializePromotion(p: {
     minAppVersion: p.minAppVersion ?? '',
     maxAppVersion: p.maxAppVersion ?? '',
     targetAudience: p.targetAudience ?? { allowAll: true },
+    notifyChannel: p.notifyChannel ?? 'in_app',
+    push: {
+      campaignId: p.pushCampaignId ?? null,
+      dispatchedAt: p.pushDispatchedAt?.toISOString() ?? null,
+      error: p.pushError ?? null,
+    },
     stats: p.stats,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -224,6 +237,69 @@ export async function getCampaignContent(
     }
     logger.error('getCampaignContent failed', e);
     res.status(500).json({ message: 'Failed to load campaign content', code: 'INTERNAL' });
+  }
+}
+
+/**
+ * GET /feedback/campaign-delivery/promotions/:id — one promotion by id, for a
+ * push tap or deep link. Same response shape as `/content`; `{ content: null }`
+ * when it is no longer active or in schedule.
+ */
+export async function getPromotionContent(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  const userId = req.user?.id;
+  if (!userId) {
+    res.status(401).json({ message: 'Unauthorized', code: 'UNAUTHORIZED' });
+    return;
+  }
+
+  const flags = await getReportsFeatureFlags();
+  if (flags && (flags.campaignDelivery === false || flags.promotions === false)) {
+    res.status(200).json({ content: null });
+    return;
+  }
+
+  const q = req.query as unknown as { locale?: string };
+  try {
+    const result = await selectPromotionById({
+      userId,
+      promotionId: String(req.params.id),
+      locale: q.locale,
+      sessionId: headerString(req, 'x-session-id'),
+    });
+    if (!result) {
+      res.status(200).json({ content: null });
+      return;
+    }
+
+    try {
+      await CampaignEvent.create({
+        eventId: randomUUID(),
+        idempotencyKey: `${result.selectionToken}:promotion_selected`,
+        eventType: 'promotion_selected',
+        selectionToken: result.selectionToken,
+        userId,
+        sessionId: headerString(req, 'x-session-id'),
+        placement: result.placement,
+        contentType: result.contentType,
+        contentId: result.contentId,
+        modalSize: result.modalSize,
+        appVersion: headerString(req, 'x-app-version'),
+        platform: headerString(req, 'x-platform'),
+        selectionAudit: result.selectionAudit,
+      });
+    } catch (e) {
+      if (!isDuplicateKeyError(e)) {
+        logger.warn('Failed to persist selection event', e);
+      }
+    }
+
+    res.status(200).json(result);
+  } catch (e) {
+    logger.error('getPromotionContent failed', e);
+    res.status(500).json({ message: 'Failed to load promotion', code: 'INTERNAL' });
   }
 }
 
@@ -451,15 +527,10 @@ export async function internalCreatePromotion(
   const body = req.body as Record<string, unknown>;
   const doc = await Promotion.create(body);
 
-  if (body.notifyChannel === 'push' || body.notifyChannel === 'both') {
-    void createDraftNotificationCampaign({
-      title: String(body.title ?? ''),
-      body: String(body.message ?? ''),
-      category: 'PROMOTION',
-      imageUrl: body.mediaType === 'image' ? String(body.mediaUrl ?? '') || null : null,
-      audience: body.targetAudience,
-    }).catch((err) =>
-      logger.warn('Failed to create notification campaign draft for promotion', err),
+  // Push goes out automatically once the promotion is active (now, or when it is activated later).
+  if (doc.notifyChannel === 'push' || doc.notifyChannel === 'both') {
+    void dispatchPromotionPush(String(doc._id)).catch((err) =>
+      logger.warn('Failed to dispatch promotion push', err),
     );
   }
 
@@ -539,6 +610,11 @@ export async function internalPatchPromotion(
   if (!doc) {
     res.status(404).json({ message: 'Promotion not found', code: 'NOT_FOUND' });
     return;
+  }
+  if (doc.status === 'active' && (doc.notifyChannel === 'push' || doc.notifyChannel === 'both')) {
+    void dispatchPromotionPush(String(doc._id)).catch((err) =>
+      logger.warn('Failed to dispatch promotion push', err),
+    );
   }
   const s = doc.toObject();
   res.status(200).json(serializePromotion(s as Parameters<typeof serializePromotion>[0]));

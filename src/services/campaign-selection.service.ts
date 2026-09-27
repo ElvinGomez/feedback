@@ -627,6 +627,62 @@ export async function selectCampaignContent(opts: {
   };
 }
 
+/**
+ * Opens one specific promotion (push tap / deep link) without the weighted pick
+ * or frequency caps: the user already chose it. Still requires an active,
+ * in-schedule promotion and records a real selection so CTA/dismiss events work.
+ */
+export async function selectPromotionById(opts: {
+  userId: string;
+  promotionId: string;
+  locale?: string;
+  sessionId?: string;
+  now?: Date;
+}): Promise<CampaignContentResult> {
+  if (!mongoose.Types.ObjectId.isValid(opts.promotionId)) {
+    return null;
+  }
+  const now = opts.now ?? new Date();
+  const promo = (await Promotion.findById(opts.promotionId).lean().exec()) as
+    | PromotionCandidate
+    | null;
+  if (!promo || promo.status !== 'active' || !isWithinSchedule(promo.schedule, now)) {
+    return null;
+  }
+
+  const token = randomUUID();
+  const modalSize = (promo.modalSize as ModalSize) || 'medium';
+  const placement = promo.placements?.[0] ?? 'home';
+  const audit = {
+    source: 'deep_link',
+    finalSelectedContentId: opts.promotionId,
+    finalSelectedContentType: 'promotion',
+  };
+  await CampaignSelection.create({
+    token,
+    userId: opts.userId,
+    sessionId: opts.sessionId,
+    placement,
+    contentType: 'promotion',
+    contentId: opts.promotionId,
+    modalSize,
+    expiresAt: new Date(now.getTime() + SELECTION_TOKEN_TTL_MS),
+    selectionAudit: audit,
+    impressionRecorded: false,
+    invalidated: false,
+  });
+
+  return {
+    contentId: opts.promotionId,
+    contentType: 'promotion',
+    placement,
+    selectionToken: token,
+    modalSize,
+    selectionAudit: audit,
+    content: displayPromotion(promo, opts.locale),
+  };
+}
+
 async function rebuildResponseFromSelection(
   selection: {
     token: string;
