@@ -20,6 +20,11 @@ export const reportTargetTypeSchema = z.enum([
   'restaurant_review_image',
   'restaurant_visit',
   'restaurant_visit_image',
+  'hotel',
+  'hotel_image',
+  'hotel_review_image',
+  'hotel_visit',
+  'hotel_visit_image',
 ]);
 
 const reportLatLngSchema = z.object({
@@ -70,7 +75,7 @@ export const createReportBodySchema = z
       }
     }
     const needsLocationCorrection =
-      (tt === 'spot' || tt === 'restaurant') &&
+      (tt === 'spot' || tt === 'restaurant' || tt === 'hotel') &&
       data.reason === 'wrong_location';
     if (needsLocationCorrection && !data.locationCorrection) {
       ctx.addIssue({
