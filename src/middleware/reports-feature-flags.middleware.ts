@@ -29,7 +29,7 @@ export function reportRouteToFlagKey(
   if (m === 'POST' && /^\/[^/]+\/responses$/.test(path)) {
     return 'surveys';
   }
-  if (m === 'GET' && path === '/content') {
+  if (m === 'GET' && (path === '/content' || /^\/promotions\/[^/]+$/.test(path))) {
     return 'campaignDelivery';
   }
   if (m === 'POST' && (path === '/events' || path === '/refresh')) {

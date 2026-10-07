@@ -12,6 +12,7 @@ import {
 import { translationQuestionsMismatchMessage } from '../validation/survey.validation';
 import { ApiError } from '../utils/error/error.api';
 import { logger } from '../utils/logger';
+import { createDraftNotificationCampaign } from '../services/notifications-campaign.service';
 
 /** Max length for `open_text` survey answers (must match mobile client). */
 const OPEN_TEXT_MAX_LENGTH = 200;
@@ -491,6 +492,7 @@ export async function internalCreateSurvey(
     status: string;
     schedule?: { startAt?: Date; endAt?: Date };
     targetAudience?: unknown;
+    notifyChannel?: 'in_app' | 'push' | 'both';
   };
 
   const trErr = validateTranslationsPayload(
@@ -514,7 +516,19 @@ export async function internalCreateSurvey(
     status: body.status,
     schedule: body.schedule,
     targetAudience: body.targetAudience ?? { allowAll: true },
+    notifyChannel: body.notifyChannel ?? 'in_app',
   });
+
+  if (body.notifyChannel === 'push' || body.notifyChannel === 'both') {
+    void createDraftNotificationCampaign({
+      title: body.title,
+      body: 'We would love your feedback — take a quick survey.',
+      category: 'SURVEY',
+      audience: body.targetAudience,
+    }).catch((err) =>
+      logger.warn('Failed to create notification campaign draft for survey', err),
+    );
+  }
 
   const s = doc.toObject();
   res.status(201).json(serializeSurvey(s as Parameters<typeof serializeSurvey>[0]));

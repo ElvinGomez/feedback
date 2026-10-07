@@ -11,6 +11,7 @@ import {
 import { getAnnouncementStyleIssues } from '../validation/announcement.validation';
 import { ApiError } from '../utils/error/error.api';
 import { logger } from '../utils/logger';
+import { createDraftNotificationCampaign } from '../services/notifications-campaign.service';
 
 function headerString(req: AuthenticatedRequest, name: string): string | undefined {
   const v = req.headers[name.toLowerCase()];
@@ -264,6 +265,19 @@ export async function internalCreateAnnouncement(
 ): Promise<void> {
   const body = req.body as Record<string, unknown>;
   const doc = await Announcement.create(body);
+
+  if (body.notifyChannel === 'push' || body.notifyChannel === 'both') {
+    void createDraftNotificationCampaign({
+      title: String(body.title ?? ''),
+      body: String(body.message ?? ''),
+      category: 'ANNOUNCEMENT',
+      imageUrl: body.mediaType === 'image' ? String(body.mediaUrl ?? '') || null : null,
+      audience: body.targetAudience,
+    }).catch((err) =>
+      logger.warn('Failed to create notification campaign draft for announcement', err),
+    );
+  }
+
   const s = doc.toObject();
   res.status(201).json(serializeAnnouncement(s as Parameters<typeof serializeAnnouncement>[0]));
 }

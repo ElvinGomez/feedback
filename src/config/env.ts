@@ -48,4 +48,10 @@ export default {
   spotsServiceBaseUrl:
     process.env.SPOTS_SERVICE_BASE_URL?.trim().replace(/\/+$/, '') || '',
   spotsInternalApiKey: process.env.SPOTS_INTERNAL_API_KEY?.trim() || '',
+
+  /** Draft push-campaign creation when a survey/announcement/promotion picks push/both. Skip if unset. */
+  notificationsServiceBaseUrl:
+    process.env.NOTIFICATIONS_SERVICE_BASE_URL?.trim().replace(/\/+$/, '') || '',
+  notificationsInternalApiKey:
+    process.env.NOTIFICATIONS_INTERNAL_API_KEY?.trim() || '',
 };

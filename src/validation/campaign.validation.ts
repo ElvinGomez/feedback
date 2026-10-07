@@ -26,6 +26,14 @@ export const campaignContentQuerySchema = z.object({
   ...optionalAudienceLocationQuerySchema,
 });
 
+export const campaignPromotionParamsSchema = z.object({
+  id: z.string().regex(/^[a-f0-9]{24}$/i, 'Invalid promotion id'),
+});
+
+export const campaignPromotionQuerySchema = z.object({
+  locale: z.string().min(2).max(32).optional(),
+});
+
 export const campaignEventBodySchema = z
   .object({
     eventId: z.string().min(1).optional(),
@@ -182,6 +190,8 @@ export const internalCreatePromotionBodySchema = z
     minAppVersion: z.string().max(32).optional(),
     maxAppVersion: z.string().max(32).optional(),
     targetAudience: targetAudienceSchema.optional(),
+    /** Companion push notification: skip, create a draft campaign, or both. */
+    notifyChannel: z.enum(['in_app', 'push', 'both']).default('in_app'),
   })
   .superRefine((val, ctx) => {
     const styleIssues = getPromotionStyleIssues({
