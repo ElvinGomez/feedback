@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { CAMPAIGN_CONTENT_TYPES } from '../constants/campaign.constants';
+import { CAMPAIGN_CONTENT_TYPES, PROMOTION_PLACEMENTS_V1 } from '../constants/campaign.constants';
 
 const campaignPlacementConfigSchema = new mongoose.Schema(
   {
@@ -36,6 +36,6 @@ export async function getOrCreatePlacementConfig(placement: string) {
     surveyContentTypeWeight: 50,
     promotionContentTypeWeight: 50,
     enabledContentTypes: ['survey', 'promotion'],
-    promotionsEnabled: placement === 'home',
+    promotionsEnabled: (PROMOTION_PLACEMENTS_V1 as readonly string[]).includes(placement),
   });
 }

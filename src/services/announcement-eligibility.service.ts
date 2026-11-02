@@ -168,7 +168,11 @@ export async function getActiveAnnouncementsForUser(opts: {
   countryCode?: string;
   latitude?: number;
   longitude?: number;
-}): Promise<{ banner: AnnouncementPayload | null; modal: AnnouncementPayload | null }> {
+}): Promise<{
+  banner: AnnouncementPayload | null;
+  modal: AnnouncementPayload | null;
+  feedCard: AnnouncementPayload | null;
+}> {
   const now = new Date();
   const audienceCtx = {
     userId: opts.userId,
@@ -223,7 +227,7 @@ export async function getActiveAnnouncementsForUser(opts: {
   }
 
   if (!filtered.length) {
-    return { banner: null, modal: null };
+    return { banner: null, modal: null, feedCard: null };
   }
 
   const states = (await AnnouncementUserState.find({
@@ -236,21 +240,28 @@ export async function getActiveAnnouncementsForUser(opts: {
     seenCount: number;
     lastSeenSessionId?: string | null;
     lastDismissedSessionId?: string | null;
+    dismissedAt?: Date | null;
   }>;
   const stateById = new Map(states.map((s) => [s.announcementId.toString(), s]));
 
   let banner: AnnouncementCandidate | null = null;
   let modal: AnnouncementCandidate | null = null;
+  let feedCard: AnnouncementCandidate | null = null;
   for (const a of filtered) {
-    if (banner && modal) {
+    if (banner && modal && feedCard) {
       break;
     }
     const isBannerSlot = a.displayStyle === 'banner' && !banner;
     const isModalSlot = a.displayStyle === 'modal' && !modal;
-    if (!isBannerSlot && !isModalSlot) {
+    const isFeedCardSlot = a.displayStyle === 'feed_card' && !feedCard;
+    if (!isBannerSlot && !isModalSlot && !isFeedCardSlot) {
       continue;
     }
     const state = stateById.get(a._id.toString()) ?? null;
+    // A dismissed feed card never comes back on later feed loads.
+    if (isFeedCardSlot && state?.dismissedAt) {
+      continue;
+    }
     if (!passesFrequencyRule(a.frequencyRule, state, opts.sessionId)) {
       continue;
     }
@@ -258,11 +269,14 @@ export async function getActiveAnnouncementsForUser(opts: {
       banner = a;
     } else if (isModalSlot) {
       modal = a;
+    } else {
+      feedCard = a;
     }
   }
 
   return {
     banner: banner ? displayAnnouncement(banner, opts.locale) : null,
     modal: modal ? displayAnnouncement(modal, opts.locale) : null,
+    feedCard: feedCard ? displayAnnouncement(feedCard, opts.locale) : null,
   };
 }

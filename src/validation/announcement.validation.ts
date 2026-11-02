@@ -68,6 +68,7 @@ function normalizeModalSize(raw: string): AnnouncementModalSize {
 /**
  * Style rules shared by create validation and patch enforcement:
  * - banner: text or html strip (no mediaUrl / background / video)
+ * - feed_card: text or image (no background / video / html)
  * - modal medium: text, image, or html
  * - modal full_screen: text, image, video, or html (+ optional background)
  */
@@ -78,16 +79,16 @@ export function getAnnouncementStyleIssues(
   const displayStyle = normalizeDisplayStyle(input.displayStyle);
   const modalSize = normalizeModalSize(input.modalSize);
   const allowedMedia =
-    displayStyle === 'banner'
-      ? ANNOUNCEMENT_MEDIA_TYPES_BY_DISPLAY_STYLE.banner
-      : ANNOUNCEMENT_MEDIA_TYPES_BY_MODAL_SIZE[modalSize];
+    displayStyle === 'modal'
+      ? ANNOUNCEMENT_MEDIA_TYPES_BY_MODAL_SIZE[modalSize]
+      : ANNOUNCEMENT_MEDIA_TYPES_BY_DISPLAY_STYLE[displayStyle];
 
   if (!allowedMedia.includes(input.mediaType as AnnouncementMediaType)) {
     issues.push({
       path: ['mediaType'],
       message:
-        displayStyle === 'banner'
-          ? `mediaType "${input.mediaType}" is not allowed for displayStyle "banner" (allowed: ${allowedMedia.join(', ')})`
+        displayStyle !== 'modal'
+          ? `mediaType "${input.mediaType}" is not allowed for displayStyle "${displayStyle}" (allowed: ${allowedMedia.join(', ')})`
           : `mediaType "${input.mediaType}" is not allowed for modalSize "${modalSize}" (allowed: ${allowedMedia.join(', ')})`,
     });
   }
@@ -145,9 +146,9 @@ export function sanitizeAnnouncementStyle(input: AnnouncementStyleInput): {
   const modalSize =
     displayStyle === 'modal' ? normalizeModalSize(input.modalSize) : 'medium';
   const allowed =
-    displayStyle === 'banner'
-      ? ANNOUNCEMENT_MEDIA_TYPES_BY_DISPLAY_STYLE.banner
-      : ANNOUNCEMENT_MEDIA_TYPES_BY_MODAL_SIZE[modalSize];
+    displayStyle === 'modal'
+      ? ANNOUNCEMENT_MEDIA_TYPES_BY_MODAL_SIZE[modalSize]
+      : ANNOUNCEMENT_MEDIA_TYPES_BY_DISPLAY_STYLE[displayStyle];
   const mediaType = allowed.includes(input.mediaType as AnnouncementMediaType)
     ? (input.mediaType as AnnouncementMediaType)
     : 'text';
