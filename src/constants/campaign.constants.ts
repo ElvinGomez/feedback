@@ -7,12 +7,13 @@ export const CAMPAIGN_PLACEMENTS = [
   'after_capture',
   'profile',
   'explore',
+  'feed',
 ] as const;
 
 export type CampaignPlacement = (typeof CAMPAIGN_PLACEMENTS)[number];
 
 /** Promotions may only use these placements in v1. */
-export const PROMOTION_PLACEMENTS_V1 = ['home'] as const;
+export const PROMOTION_PLACEMENTS_V1 = ['home', 'feed'] as const;
 
 export const CAMPAIGN_CONTENT_TYPES = ['survey', 'promotion'] as const;
 export type CampaignContentType = (typeof CAMPAIGN_CONTENT_TYPES)[number];

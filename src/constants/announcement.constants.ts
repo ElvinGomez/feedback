@@ -8,7 +8,7 @@ export const ANNOUNCEMENT_STATUSES = [
 ] as const;
 export type AnnouncementStatus = (typeof ANNOUNCEMENT_STATUSES)[number];
 
-export const ANNOUNCEMENT_DISPLAY_STYLES = ['banner', 'modal'] as const;
+export const ANNOUNCEMENT_DISPLAY_STYLES = ['banner', 'modal', 'feed_card'] as const;
 export type AnnouncementDisplayStyle = (typeof ANNOUNCEMENT_DISPLAY_STYLES)[number];
 
 /** Modal chrome size — only applies when `displayStyle` is `modal`. */
@@ -27,6 +27,7 @@ export type AnnouncementMediaType = (typeof ANNOUNCEMENT_MEDIA_TYPES)[number];
 /**
  * Allowed media by display style (+ modal size for modals):
  * - banner: text or compact html strip
+ * - feed_card: inline card in the traveler feed — text or image
  * - modal medium: text, optional image, or html sheet
  * - modal full_screen: text, image, video, or html (optional background)
  */
@@ -36,6 +37,7 @@ export const ANNOUNCEMENT_MEDIA_TYPES_BY_DISPLAY_STYLE: Record<
 > = {
   banner: ['text', 'html'],
   modal: ['text', 'image', 'video', 'html'],
+  feed_card: ['text', 'image'],
 };
 
 export const ANNOUNCEMENT_MEDIA_TYPES_BY_MODAL_SIZE: Record<
