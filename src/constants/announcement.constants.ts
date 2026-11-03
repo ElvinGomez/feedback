@@ -27,7 +27,7 @@ export type AnnouncementMediaType = (typeof ANNOUNCEMENT_MEDIA_TYPES)[number];
 /**
  * Allowed media by display style (+ modal size for modals):
  * - banner: text or compact html strip
- * - feed_card: inline card in the traveler feed — text or image
+ * - feed_card: inline card in the traveler feed — text, image, video, or html
  * - modal medium: text, optional image, or html sheet
  * - modal full_screen: text, image, video, or html (optional background)
  */
@@ -37,7 +37,7 @@ export const ANNOUNCEMENT_MEDIA_TYPES_BY_DISPLAY_STYLE: Record<
 > = {
   banner: ['text', 'html'],
   modal: ['text', 'image', 'video', 'html'],
-  feed_card: ['text', 'image'],
+  feed_card: ['text', 'image', 'video', 'html'],
 };
 
 export const ANNOUNCEMENT_MEDIA_TYPES_BY_MODAL_SIZE: Record<

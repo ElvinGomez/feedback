@@ -68,7 +68,7 @@ function normalizeModalSize(raw: string): AnnouncementModalSize {
 /**
  * Style rules shared by create validation and patch enforcement:
  * - banner: text or html strip (no mediaUrl / background / video)
- * - feed_card: text or image (no background / video / html)
+ * - feed_card: text, image, video, or html (no background)
  * - modal medium: text, image, or html
  * - modal full_screen: text, image, video, or html (+ optional background)
  */
