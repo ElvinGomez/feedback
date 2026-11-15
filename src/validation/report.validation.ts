@@ -10,6 +10,7 @@ export const reportTargetTypeSchema = z.enum([
   'spot_image',
   'story',
   'post',
+  'feed_comment',
   'user',
   'review',
   'spot_visit',

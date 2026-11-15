@@ -49,6 +49,14 @@ export const REPORT_REASONS_BY_TARGET: Record<
     'privacy_violation',
     'other',
   ],
+  feed_comment: [
+    'harassment',
+    'hate_speech',
+    'spam',
+    'personal_attack',
+    'contains_pii',
+    'other',
+  ],
   user: [
     'harassment',
     'hate_speech',

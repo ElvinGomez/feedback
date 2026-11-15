@@ -5,6 +5,7 @@ export type ReportTargetType =
   | 'spot_image'
   | 'story'
   | 'post'
+  | 'feed_comment'
   | 'user'
   | 'review'
   | 'spot_visit'
@@ -74,6 +75,7 @@ const contentReportSchema = new Schema<IContentReport>(
         'spot_image',
         'story',
         'post',
+        'feed_comment',
         'user',
         'review',
         'spot_visit',

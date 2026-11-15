@@ -63,6 +63,21 @@ export async function lookupReportTargetOwner(
     return { status: 'ok', ownerUserId: id || null };
   }
 
+  if (targetType === 'feed_comment') {
+    if (!env.userManagementServiceBaseUrl || !env.usersInternalApiKey) return { status: 'skipped' };
+    try {
+      const res = await fetch(`${env.userManagementServiceBaseUrl}/users/internal/feed/comments/${encodeURIComponent(targetId.trim())}`, {
+        headers: { Authorization: `Bearer ${env.usersInternalApiKey}` },
+      });
+      if (!res.ok) throw new Error(`Feed comment owner lookup returned ${res.status}`);
+      const body = await res.json() as { data?: { comment?: { userId?: string | null } } };
+      return { status: 'ok', ownerUserId: body.data?.comment?.userId?.trim() || null };
+    } catch (err) {
+      logger.warn('lookupReportTargetOwner failed', err);
+      return { status: 'error' };
+    }
+  }
+
   const needsSpots =
     targetType === 'spot_visit' ||
     targetType === 'spot_visit_image' ||
