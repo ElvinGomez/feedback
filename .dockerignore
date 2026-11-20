@@ -1,0 +1,9 @@
+node_modules
+dist
+coverage
+.git
+.vercel
+graphify-out
+.env*
+!.env.example
+*.log
